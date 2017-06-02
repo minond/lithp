@@ -7,48 +7,6 @@
 const char* PROMPT = "lithp> ";
 const char* VERSION = "0.0.0";
 
-char* read(char*);
-
-int main(int argc, char** argv) {
-  char* grammar = read("grammar.txt");
-
-  if (!grammar) {
-    printf("failed to read grammar file");
-    exit(EXIT_FAILURE);
-  }
-
-  mpc_parser_t* Number = mpc_new("number");
-  mpc_parser_t* Operator = mpc_new("operator");
-  mpc_parser_t* Expr = mpc_new("expr");
-  mpc_parser_t* Lithp = mpc_new("lithp");
-
-  mpca_lang(MPCA_LANG_DEFAULT, grammar,
-    Number, Operator, Expr, Lithp);
-
-  printf("Lithp Version %s\n", VERSION);
-  printf("Press Ctrl+c to Exit\n\n");
-
-  while (1) {
-    mpc_result_t result;
-    char* input = readline(PROMPT);
-
-    if (mpc_parse("<stdin>", input, Lithp, &result)) {
-      mpc_ast_print(result.output);
-      mpc_ast_delete(result.output);
-    } else {
-      mpc_err_print(result.error);
-      mpc_err_delete(result.error);
-    }
-
-    add_history(input);
-    free(input);
-  }
-
-  mpc_cleanup(4, Number, Operator, Expr, Lithp);
-
-  return 0;
-}
-
 char* read(char* filename) {
   char* buffer = 0;
   long length;
@@ -69,4 +27,75 @@ char* read(char* filename) {
   }
 
   return buffer;
+}
+
+long eval_op(long x, char* op, long y) {
+  if (strcmp(op, "+") == 0)
+    return x + y;
+  if (strcmp(op, "-") == 0)
+    return x - y;
+  if (strcmp(op, "*") == 0)
+    return x * y;
+  if (strcmp(op, "/") == 0)
+    return x / y;
+
+  return 0l;
+}
+
+long eval(mpc_ast_t* node) {
+  if (strstr(node->tag, "number")) {
+    return atoi(node->contents);
+  }
+
+  // children[0] = '('
+  // children[children_num] = ')'
+  int i = 1;
+  char* op = node->children[i++]->contents;
+  long val = eval(node->children[i++]);
+
+  while (strstr(node->children[i]->tag, "expr"))
+    val = eval_op(val, op, eval(node->children[i++]));
+
+  return val;
+}
+
+int main(int argc, char** argv) {
+  char* grammar = read("grammar.txt");
+
+  if (!grammar) {
+    printf("failed to read grammar file");
+    exit(EXIT_FAILURE);
+  }
+
+  mpc_parser_t* Number = mpc_new("number");
+  mpc_parser_t* Operator = mpc_new("operator");
+  mpc_parser_t* Expr = mpc_new("expr");
+  mpc_parser_t* Lithp = mpc_new("lithp");
+
+  mpca_lang(MPCA_LANG_DEFAULT, grammar,
+    Number, Operator, Expr, Lithp);
+  free(grammar);
+
+  printf("Lithp Version %s\n", VERSION);
+  printf("Press Ctrl+c to Exit\n\n");
+
+  while (1) {
+    mpc_result_t result;
+    char* input = readline(PROMPT);
+
+    if (mpc_parse("<stdin>", input, Lithp, &result)) {
+      printf("%s%li\n", PROMPT, eval(result.output));
+      mpc_ast_delete(result.output);
+    } else {
+      mpc_err_print(result.error);
+      mpc_err_delete(result.error);
+    }
+
+    add_history(input);
+    free(input);
+  }
+
+  mpc_cleanup(4, Number, Operator, Expr, Lithp);
+
+  return 0;
 }
