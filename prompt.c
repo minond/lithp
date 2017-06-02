@@ -7,28 +7,66 @@
 const char* PROMPT = "lithp> ";
 const char* VERSION = "0.0.0";
 
-// #include <limits.h>
-//
-// int int_reduce(int (*func)(int, int), int* ints, int id) {
-//   int store = id;
-//
-//   int i = 0;
-//   int len = sizeof(ints) / sizeof(int);
-//
-//   for (; i < len; i++)
-//     store = (*func)(store, ints[i]);
-//
-//   return store;
-// }
-//
-// int int_min_binary(int x, int y) {
-//   return x < y ? x : y;
-// }
-//
-// int int_min() {
-//   int nums[3] = {2, 1, 3};
-//   return int_reduce(int_min_binary, nums, INT_MAX);
-// }
+typedef enum {
+  LVAL_NUM,
+  LVAL_ERR
+} lval_type;
+
+typedef enum {
+  LERR_DIV_ZERO,
+  LERR_BAD_OP,
+  LERR_BAD_NUM
+} lerr;
+
+typedef struct {
+  lval_type type;
+  lerr err;
+  long num;
+} lval;
+
+lval lval_num(long num) {
+  lval val;
+
+  val.type = LVAL_NUM;
+  val.num = num;
+
+  return val;
+}
+
+lval lval_err(lerr err) {
+  lval val;
+
+  val.type = LVAL_ERR;
+  val.err = err;
+
+  return val;
+}
+
+char* lval_err_string(lerr err) {
+  switch (err) {
+  case LERR_BAD_NUM: return "bad number";
+  case LERR_BAD_OP: return "bad operator";
+  case LERR_DIV_ZERO: return "cannot devide by zero";
+  default: return "unknown error";
+  }
+}
+
+void lval_print(lval val) {
+  switch (val.type) {
+  case LVAL_NUM:
+    printf("%li", val.num);
+    break;
+
+  case LVAL_ERR:
+    printf("error: %s", lval_err_string(val.err));
+    break;
+  }
+}
+
+void lval_println(lval val) {
+  lval_print(val);
+  putchar('\n');
+}
 
 char* read(char* filename) {
   char* buffer = 0;
@@ -52,33 +90,36 @@ char* read(char* filename) {
   return buffer;
 }
 
-long eval_op(long x, char* op, long y) {
+lval eval_op(lval x, char* op, lval y) {
   if (strcmp(op, "+") == 0)
-    return x + y;
-  if (strcmp(op, "-") == 0)
-    return x - y;
-  if (strcmp(op, "*") == 0)
-    return x * y;
-  if (strcmp(op, "/") == 0)
-    return x / y;
-  if (strcmp(op, "min") == 0)
-    return x < y ? x : y;
-  if (strcmp(op, "max") == 0)
-    return x < y ? y : x;
-
-  return 0l;
+    return lval_num(x.num + y.num);
+  else if (strcmp(op, "-") == 0)
+    return lval_num(x.num - y.num);
+  else if (strcmp(op, "*") == 0)
+    return lval_num(x.num * y.num);
+  else if (strcmp(op, "/") == 0) {
+    if (y.num == 0)
+      return lval_err(LERR_DIV_ZERO);
+    else
+      return lval_num(x.num / y.num);
+  } else if (strcmp(op, "min") == 0)
+    return lval_num(x.num < y.num ? x.num : y.num);
+  else if (strcmp(op, "max") == 0)
+    return lval_num(x.num < y.num ? y.num : x.num);
+  else
+    return lval_err(LERR_BAD_OP);
 }
 
-long eval(mpc_ast_t* node) {
+lval eval(mpc_ast_t* node) {
   if (strstr(node->tag, "number")) {
-    return atoi(node->contents);
+    return lval_num(atoi(node->contents));
   }
 
   // children[0] = '('
   // children[children_num] = ')'
   int i = 1;
   char* op = node->children[i++]->contents;
-  long val = eval(node->children[i++]);
+  lval val = eval(node->children[i++]);
 
   while (strstr(node->children[i]->tag, "expr"))
     val = eval_op(val, op, eval(node->children[i++]));
@@ -111,7 +152,7 @@ int main(int argc, char** argv) {
     char* input = readline(PROMPT);
 
     if (mpc_parse("<stdin>", input, Lithp, &result)) {
-      printf("%s%li\n", PROMPT, eval(result.output));
+      lval_println(eval(result.output));
       mpc_ast_delete(result.output);
     } else {
       mpc_err_print(result.error);
