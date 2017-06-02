@@ -7,6 +7,29 @@
 const char* PROMPT = "lithp> ";
 const char* VERSION = "0.0.0";
 
+// #include <limits.h>
+//
+// int int_reduce(int (*func)(int, int), int* ints, int id) {
+//   int store = id;
+//
+//   int i = 0;
+//   int len = sizeof(ints) / sizeof(int);
+//
+//   for (; i < len; i++)
+//     store = (*func)(store, ints[i]);
+//
+//   return store;
+// }
+//
+// int int_min_binary(int x, int y) {
+//   return x < y ? x : y;
+// }
+//
+// int int_min() {
+//   int nums[3] = {2, 1, 3};
+//   return int_reduce(int_min_binary, nums, INT_MAX);
+// }
+
 char* read(char* filename) {
   char* buffer = 0;
   long length;
@@ -38,6 +61,10 @@ long eval_op(long x, char* op, long y) {
     return x * y;
   if (strcmp(op, "/") == 0)
     return x / y;
+  if (strcmp(op, "min") == 0)
+    return x < y ? x : y;
+  if (strcmp(op, "max") == 0)
+    return x < y ? y : x;
 
   return 0l;
 }
