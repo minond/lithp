@@ -112,7 +112,9 @@ lval eval_op(lval x, char* op, lval y) {
 
 lval eval(mpc_ast_t* node) {
   if (strstr(node->tag, "number")) {
-    return lval_num(atoi(node->contents));
+    errno = 0;
+    long num = strtol(node->contents, NULL, 10);
+    return errno != ERANGE ? lval_num(num) : lval_err(LERR_BAD_NUM);
   }
 
   // children[0] = '('
