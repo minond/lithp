@@ -15,6 +15,8 @@ typedef enum {
 } lval_type;
 
 typedef enum {
+  LERR_BAD_SEXPR_START,
+  LERR_NUM_REQUIRED,
   LERR_DIV_ZERO,
   LERR_BAD_OP,
   LERR_BAD_NUM
@@ -31,6 +33,7 @@ typedef struct lval {
   struct lval** cell;
 } lval;
 
+lval* lval_eval(lval* val);
 void lval_print(lval* val);
 
 lval* lval_sexpr(void) {
@@ -130,6 +133,8 @@ char* lval_err_string(lerr err) {
     case LERR_BAD_NUM: return "bad number";
     case LERR_BAD_OP: return "bad operator";
     case LERR_DIV_ZERO: return "cannot devide by zero";
+    case LERR_BAD_SEXPR_START: return "s-expression does not start with symbol";
+    case LERR_NUM_REQUIRED: return "cannot operate on a non-number";
     default: return "unknown error";
   }
 }
@@ -195,44 +200,107 @@ char* read(char* filename) {
   return buffer;
 }
 
-// lval eval_op(lval x, char* op, lval y) {
-//   if (strcmp(op, "+") == 0)
-//     return lval_num(x.num + y.num);
-//   else if (strcmp(op, "-") == 0)
-//     return lval_num(x.num - y.num);
-//   else if (strcmp(op, "*") == 0)
-//     return lval_num(x.num * y.num);
-//   else if (strcmp(op, "/") == 0) {
-//     if (y.num == 0)
-//       return lval_err(LERR_DIV_ZERO);
-//     else
-//       return lval_num(x.num / y.num);
-//   } else if (strcmp(op, "min") == 0)
-//     return lval_num(x.num < y.num ? x.num : y.num);
-//   else if (strcmp(op, "max") == 0)
-//     return lval_num(x.num < y.num ? y.num : x.num);
-//   else
-//     return lval_err(LERR_BAD_OP);
-// }
+lval* lval_pop(lval* val, int i) {
+  lval* child = val->cell[i];
 
-// lval eval(mpc_ast_t* node) {
-//   if (strstr(node->tag, "number")) {
-//     errno = 0;
-//     long num = strtol(node->contents, NULL, 10);
-//     return errno != ERANGE ? lval_num(num) : lval_err(LERR_BAD_NUM);
-//   }
-//
-//   // children[0] = '('
-//   // children[children_num] = ')'
-//   int i = 1;
-//   char* op = node->children[i++]->contents;
-//   lval val = eval(node->children[i++]);
-//
-//   while (strstr(node->children[i]->tag, "expr"))
-//     val = eval_op(val, op, eval(node->children[i++]));
-//
-//   return val;
-// }
+  memmove(&val->cell[i], &val->cell[i + 1],
+    sizeof(lval*) * (val->count - 1));
+
+  val->count--;
+  val->cell = realloc(val->cell, sizeof(lval*) * val->count);
+
+  return child;
+}
+
+lval* lval_take(lval* val, int i) {
+  lval* child = lval_pop(val, i);
+  lval_del(val);
+  return child;
+}
+
+lval* buildin_op(lval* val, char* op) {
+  for (int i = 0; i < val->count; i++) {
+    if (val->cell[i]->type != LVAL_NUM) {
+      lval_del(val);
+      return lval_err(LERR_NUM_REQUIRED);
+    }
+  }
+
+  lval* head = lval_pop(val, 0);
+
+  // negatives
+  if ((strcmp(op, "-") == 0) && val->count == 0) {
+    val->num = -val->num;
+  }
+
+  while (val->count > 0) {
+    lval* next = lval_pop(val, 0);
+
+    if (strcmp(op, "+") == 0) {
+      head->num += next->num;
+    } else if (strcmp(op, "-") == 0) {
+      head->num -= next->num;
+    } else if (strcmp(op, "*") == 0) {
+      head->num *= next->num;
+    } else if (strcmp(op, "/") == 0) {
+      if (next->num == 0) {
+        lval_del(head);
+        lval_del(next);
+
+        head = lval_err(LERR_DIV_ZERO);
+        break;
+      }
+
+      head->num /= next->num;
+    }
+
+    lval_del(next);
+  }
+
+  lval_del(val);
+  return head;
+}
+
+lval* lval_eval_sexpr(lval* val) {
+  for (int i = 0; i < val->count; i++) {
+    val->cell[i] = lval_eval(val->cell[i]);
+  }
+
+  for (int i = 0; i < val->count; i++) {
+    if (val->cell[i]->type == LVAL_ERR) {
+      return lval_take(val, i);
+    }
+  }
+
+  if (val->count == 0) {
+    return val;
+  }
+
+  if (val->count == 1) {
+    return lval_take(val, 0);
+  }
+
+  lval* head = lval_pop(val, 0);
+
+  if (head->type != LVAL_SYM) {
+    lval_del(head);
+    lval_del(val);
+    return lval_err(LERR_BAD_SEXPR_START);
+  }
+
+  lval* result = buildin_op(val, head->sym);
+  lval_del(head);
+
+  return result;
+}
+
+lval* lval_eval(lval* val) {
+  if (val->type == LVAL_SEXPR) {
+    return lval_eval_sexpr(val);
+  }
+
+  return val;
+}
 
 int main() {
   char* grammar = read("grammar.txt");
@@ -260,8 +328,7 @@ int main() {
     char* input = readline(PROMPT);
 
     if (mpc_parse("<stdin>", input, Lithp, &result)) {
-      // lval_println(eval(result.output));
-      lval* val = lval_read(result.output);
+      lval* val = lval_eval(lval_read(result.output));
       lval_println(val);
       lval_del(val);
       mpc_ast_delete(result.output);
