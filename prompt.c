@@ -313,6 +313,23 @@ lval* builtin_join(lval* args) {
   return joined;
 }
 
+lval* builtin_cons(lval* args) {
+  LASSERT(args, args->count == 2,
+    "Function 'cons' expects two argument.");
+  LASSERT(args, args->cell[1]->type == LVAL_QEXPR,
+    "Function 'cons' expects a value and a Q-Expression.");
+
+  lval* list = lval_sexpr();
+  lval* head = lval_pop(args, 0);
+  lval* body = lval_pop(args, 0);
+
+  lval_add(list, head);
+  lval_join(list, body);
+  lval_del(args);
+
+  return list;
+}
+
 lval* builtin_len(lval* args) {
   LASSERT(args, args->count == 1,
     "Function 'len' expects one argument.");
@@ -381,6 +398,8 @@ lval* builtin(lval* args, char* func) {
     return builtin_eval(args);
   } else if (strcmp("len", func) == 0) {
     return builtin_len(args);
+  } else if (strcmp("cons", func) == 0) {
+    return builtin_cons(args);
   } else if (strstr("+-/*", func)) {
     return builtin_op(args, func);
   }
