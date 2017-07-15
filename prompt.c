@@ -4,6 +4,9 @@
 #include "readline.h"
 #include "vendor/mpc/mpc.h"
 
+#define LASSERT(args, cond, err) \
+  if (!(cond)) { lval_del(args); return lval_err(err); }
+
 const char* PROMPT = "lithp> ";
 const char* VERSION = "0.0.0";
 
@@ -26,6 +29,7 @@ typedef struct lval {
   struct lval** cell;
 } lval;
 
+lval* lval_pop(lval* val, int i);
 lval* lval_eval(lval* val);
 void lval_print(lval* val);
 
@@ -98,6 +102,16 @@ lval* lval_add(lval* val, lval* child) {
   val->cell = realloc(val->cell, sizeof(lval*) * val->count);
   val->cell[val->count - 1] = child;
   return val;
+}
+
+lval* lval_join(lval* holder, lval* drained) {
+  while (drained->count) {
+    holder = lval_add(holder, lval_pop(drained, 0));
+  }
+
+  lval_del(drained);
+
+  return holder;
 }
 
 lval* lval_read(mpc_ast_t* t) {
@@ -198,6 +212,14 @@ char* read(char* filename) {
   return buffer;
 }
 
+/**
+ * extracts a single element from an S-Expression at the index i and shifts the
+ * rest of the list backward so that it no longer contains that `lval*`. It
+ * then returns the extracted value. Notice that it doesn't delete the input
+ * list. It is like taking an element from a list and popping it out, leaving
+ * what remains. This means that both the element popped and the old list need
+ * to be deleted at some ppoint with `lval_del`.
+ */
 lval* lval_pop(lval* val, int i) {
   lval* child = val->cell[i];
 
@@ -210,10 +232,97 @@ lval* lval_pop(lval* val, int i) {
   return child;
 }
 
+/**
+ * similar to `lval_pop` but it deletes the list it has extracted the element
+ * from. This is like taking an element from the list and deleting the rest. It
+ * is a slight variation on `lval_pop` but it makes our code easier to read in
+ * some places. Unlike `lval_pop`, only the expression you take from the list
+ * needs to be deleted by `lval_del`.
+ */
 lval* lval_take(lval* val, int i) {
   lval* child = lval_pop(val, i);
   lval_del(val);
   return child;
+}
+
+lval* builtin_head(lval* args) {
+  LASSERT(args, args->count == 1,
+    "Function 'head' expects one argument.");
+  LASSERT(args, args->cell[0]->type == LVAL_QEXPR,
+    "Function 'head' expects a Q-Expression.");
+  LASSERT(args, args->cell[0]->count != 0,
+    "Function 'head' passed an empty Q-Expression.");
+
+  // get the first argument then pop all elements from it until we have just
+  // one and return that
+  lval* arg = lval_take(args, 0);
+
+  while (arg->count > 1) {
+    lval_del(lval_pop(arg, 1));
+  }
+
+  return arg;
+}
+
+lval* builtin_tail(lval* args) {
+  LASSERT(args, args->count == 1,
+    "Function 'tail' expects one argument.");
+  LASSERT(args, args->cell[0]->type == LVAL_QEXPR,
+    "Function 'tail' expects a Q-Expression.");
+  LASSERT(args, args->cell[0]->count != 0,
+    "Function 'tail' passed an empty Q-Expression.");
+
+  // take the first argument, delete the first child and return it
+  lval* arg = lval_take(args, 0);
+  lval_del(lval_pop(arg, 0));
+
+  return arg;
+}
+
+lval* builtin_list(lval* args) {
+  args->type = LVAL_QEXPR;
+  return args;
+}
+
+lval* builtin_eval(lval* args) {
+  LASSERT(args, args->count == 1,
+    "Function 'eval' expects one argument.");
+  LASSERT(args, args->cell[0]->type == LVAL_QEXPR,
+    "Function 'eval' expects a Q-Expression.");
+
+  lval* arg = lval_take(args, 0);
+  arg->type = LVAL_SEXPR;
+
+  return lval_eval(arg);
+}
+
+lval* builtin_join(lval* args) {
+  for (int i = 0; i < args->count; i++) {
+    LASSERT(args, args->cell[i]->type == LVAL_QEXPR,
+      "Function 'join' expects only Q-Expressions.");
+  }
+
+  lval* joined = lval_pop(args, 0);
+
+  while (args->count) {
+    joined = lval_join(joined, lval_pop(args, 0));
+  }
+
+  lval_del(args);
+
+  return joined;
+}
+
+lval* builtin_len(lval* args) {
+  LASSERT(args, args->count == 1,
+    "Function 'len' expects one argument.");
+  LASSERT(args, args->cell[0]->type == LVAL_QEXPR,
+    "Function 'len' expects a Q-Expression.");
+
+  long len = args->cell[0]->count;
+  lval_del(args);
+
+  return lval_num(len);
 }
 
 lval* builtin_op(lval* val, char* op) {
@@ -259,6 +368,28 @@ lval* builtin_op(lval* val, char* op) {
   return head;
 }
 
+lval* builtin(lval* args, char* func) {
+  if (strcmp("list", func) == 0) {
+    return builtin_list(args);
+  } else if (strcmp("head", func) == 0) {
+    return builtin_head(args);
+  } else if (strcmp("tail", func) == 0) {
+    return builtin_tail(args);
+  } else if (strcmp("join", func) == 0) {
+    return builtin_join(args);
+  } else if (strcmp("eval", func) == 0) {
+    return builtin_eval(args);
+  } else if (strcmp("len", func) == 0) {
+    return builtin_len(args);
+  } else if (strstr("+-/*", func)) {
+    return builtin_op(args, func);
+  }
+
+  lval_del(args);
+
+  return lval_err(strcat("Unknow function: ", func));
+}
+
 lval* lval_eval_sexpr(lval* val) {
   for (int i = 0; i < val->count; i++) {
     val->cell[i] = lval_eval(val->cell[i]);
@@ -286,7 +417,7 @@ lval* lval_eval_sexpr(lval* val) {
     return lval_err("s-expression does not start with symbol");
   }
 
-  lval* result = builtin_op(val, head->sym);
+  lval* result = builtin(val, head->sym);
   lval_del(head);
 
   return result;
