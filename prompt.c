@@ -10,6 +10,7 @@ const char* VERSION = "0.0.0";
 typedef enum {
   LVAL_SYM,
   LVAL_SEXPR,
+  LVAL_QEXPR,
   LVAL_NUM,
   LVAL_ERR
 } lval_type;
@@ -35,6 +36,14 @@ typedef struct lval {
 
 lval* lval_eval(lval* val);
 void lval_print(lval* val);
+
+lval* lval_qexpr(void) {
+  lval* val = malloc(sizeof(lval));
+  val->type = LVAL_QEXPR;
+  val->cell = NULL;
+  val->count = 0;
+  return val;
+}
 
 lval* lval_sexpr(void) {
   lval* val = malloc(sizeof(lval));
@@ -71,7 +80,9 @@ void lval_del(lval* val) {
     case LVAL_NUM: break;
     case LVAL_ERR: break;
     case LVAL_SYM: free(val->sym); break;
+
     case LVAL_SEXPR:
+    case LVAL_QEXPR:
       for (int i = 0; i < val->count; i++) {
         lval_del(val->cell[i]);
       }
@@ -109,6 +120,8 @@ lval* lval_read(mpc_ast_t* t) {
     val = lval_sexpr();
   if (strstr(t->tag, "sexpr"))
     val = lval_sexpr();
+  if (strstr(t->tag, "qexpr"))
+    val = lval_qexpr();
 
   for (int i = 0; i < t->children_num; i++) {
     if (strcmp(t->children[i]->contents, "(") == 0)
@@ -161,6 +174,10 @@ void lval_print(lval* val) {
 
     case LVAL_SEXPR:
       lval_expr_print(val, '(', ')');
+      break;
+
+    case LVAL_QEXPR:
+      lval_expr_print(val, '{', '}');
       break;
 
     case LVAL_NUM:
@@ -313,11 +330,12 @@ int main() {
   mpc_parser_t* Number = mpc_new("number");
   mpc_parser_t* Symbol = mpc_new("symbol");
   mpc_parser_t* Sexpr = mpc_new("sexpr");
+  mpc_parser_t* Qexpr = mpc_new("qexpr");
   mpc_parser_t* Expr = mpc_new("expr");
   mpc_parser_t* Lithp = mpc_new("lithp");
 
   mpca_lang(MPCA_LANG_DEFAULT, grammar,
-    Number, Symbol, Sexpr, Expr, Lithp);
+    Number, Symbol, Sexpr, Qexpr, Expr, Lithp);
   free(grammar);
 
   printf("Lithp Version %s\n", VERSION);
@@ -341,7 +359,7 @@ int main() {
     free(input);
   }
 
-  mpc_cleanup(5, Number, Symbol, Sexpr, Expr, Lithp);
+  mpc_cleanup(6, Number, Symbol, Sexpr, Qexpr, Expr, Lithp);
 
   return 0;
 }
