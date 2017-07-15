@@ -15,18 +15,10 @@ typedef enum {
   LVAL_ERR
 } lval_type;
 
-typedef enum {
-  LERR_BAD_SEXPR_START,
-  LERR_NUM_REQUIRED,
-  LERR_DIV_ZERO,
-  LERR_BAD_OP,
-  LERR_BAD_NUM
-} lerr;
-
 typedef struct lval {
   lval_type type;
 
-  lerr err;
+  char* err;
   char* sym;
   long num;
 
@@ -68,7 +60,7 @@ lval* lval_num(long num) {
   return val;
 }
 
-lval* lval_err(lerr err) {
+lval* lval_err(char* err) {
   lval* val = malloc(sizeof(lval));
   val->type = LVAL_ERR;
   val->err = err;
@@ -98,7 +90,7 @@ lval* lval_read_num(mpc_ast_t* t) {
   errno = 0;
   long x = strtol(t->contents, NULL, 10);
   return errno != ERANGE ?
-    lval_num(x) : lval_err(LERR_BAD_NUM);
+    lval_num(x) : lval_err("bad number");
 }
 
 lval* lval_add(lval* val, lval* child) {
@@ -141,17 +133,6 @@ lval* lval_read(mpc_ast_t* t) {
   return val;
 }
 
-char* lval_err_string(lerr err) {
-  switch (err) {
-    case LERR_BAD_NUM: return "bad number";
-    case LERR_BAD_OP: return "bad operator";
-    case LERR_DIV_ZERO: return "cannot devide by zero";
-    case LERR_BAD_SEXPR_START: return "s-expression does not start with symbol";
-    case LERR_NUM_REQUIRED: return "cannot operate on a non-number";
-    default: return "unknown error";
-  }
-}
-
 void lval_expr_print(lval* val, char open, char close) {
   putchar(open);
 
@@ -185,7 +166,7 @@ void lval_print(lval* val) {
       break;
 
     case LVAL_ERR:
-      printf("error: %s", lval_err_string(val->err));
+      printf("error: %s", val->err);
       break;
   }
 }
@@ -235,11 +216,11 @@ lval* lval_take(lval* val, int i) {
   return child;
 }
 
-lval* buildin_op(lval* val, char* op) {
+lval* builtin_op(lval* val, char* op) {
   for (int i = 0; i < val->count; i++) {
     if (val->cell[i]->type != LVAL_NUM) {
       lval_del(val);
-      return lval_err(LERR_NUM_REQUIRED);
+      return lval_err("cannot operate on a non-number");
     }
   }
 
@@ -264,7 +245,7 @@ lval* buildin_op(lval* val, char* op) {
         lval_del(head);
         lval_del(next);
 
-        head = lval_err(LERR_DIV_ZERO);
+        head = lval_err("cannot devide by zero");
         break;
       }
 
@@ -302,10 +283,10 @@ lval* lval_eval_sexpr(lval* val) {
   if (head->type != LVAL_SYM) {
     lval_del(head);
     lval_del(val);
-    return lval_err(LERR_BAD_SEXPR_START);
+    return lval_err("s-expression does not start with symbol");
   }
 
-  lval* result = buildin_op(val, head->sym);
+  lval* result = builtin_op(val, head->sym);
   lval_del(head);
 
   return result;
