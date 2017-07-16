@@ -10,7 +10,15 @@
 const char* PROMPT = "lithp> ";
 const char* VERSION = "0.0.0";
 
+struct lval;
+struct lenv;
+typedef struct lval lval;
+typedef struct lenv lenv;
+
+typedef lval*(*lbuiltin)(lenv*, lval*);
+
 typedef enum {
+  LVAL_FUN,
   LVAL_SYM,
   LVAL_SEXPR,
   LVAL_QEXPR,
@@ -18,24 +26,40 @@ typedef enum {
   LVAL_ERR
 } lval_type;
 
-typedef struct lval {
+struct lval {
   lval_type type;
 
+  long num;
   char* err;
   char* sym;
-  long num;
+  lbuiltin fun;
 
   int count;
   struct lval** cell;
-} lval;
+};
 
-lval* lval_pop(lval* val, int i);
-lval* lval_eval(lval* val);
-void lval_print(lval* val);
+struct lenv {
+  int count;
+  char** syms;
+  lval** vals;
+};
+
+lval* lval_pop(lval*, int);
+lval* lval_eval(lval*);
+lval* lval_copy(lval*);
+void lval_print(lval*);
 
 lval* lval_qexpr(void) {
   lval* val = malloc(sizeof(lval));
   val->type = LVAL_QEXPR;
+  val->cell = NULL;
+  val->count = 0;
+  return val;
+}
+
+lval* lval_fun(void) {
+  lval* val = malloc(sizeof(lval));
+  val->type = LVAL_FUN;
   val->cell = NULL;
   val->count = 0;
   return val;
@@ -73,6 +97,7 @@ lval* lval_err(char* err) {
 
 void lval_del(lval* val) {
   switch (val->type) {
+    case LVAL_FUN: break;
     case LVAL_NUM: break;
     case LVAL_ERR: break;
     case LVAL_SYM: free(val->sym); break;
@@ -88,6 +113,41 @@ void lval_del(lval* val) {
   }
 
   free(val);
+}
+
+lenv* lenv_new(void) {
+  lenv* env = malloc(sizeof(lenv));
+  env->count = 0;
+  env->syms = NULL;
+  env->vals = NULL;
+  return env;
+}
+
+void lenv_del(lenv* env) {
+  for (int i = 0; i < env->count; i++) {
+    free(env->syms[i]);
+    lval_del(env->vals[i]);
+  }
+
+  free(env->syms);
+  free(env->vals);
+  free(env);
+}
+
+/**
+ * to get a value from the environment we loop over all the items in the
+ * environment and check if the given symbol matches any of the stored strings.
+ * if we find a match we can return a copy of the stored value. if no match is
+ * found we should return an error.
+ */
+lval* lenv_get(lenv* env, lval* loopup) {
+  for (int i = 0; i < env->count; i++) {
+    if (strcpy(env->syms[i], loopup->sym) == 0) {
+      return lval_copy(env->vals[i]);
+    }
+  }
+
+  return lval_err("Unbound symbol!");
 }
 
 lval* lval_read_num(mpc_ast_t* t) {
@@ -163,6 +223,10 @@ void lval_expr_print(lval* val, char open, char close) {
 
 void lval_print(lval* val) {
   switch (val->type) {
+    case LVAL_FUN:
+      printf("<function>");
+      break;
+
     case LVAL_SYM:
       printf("%s", val->sym);
       break;
@@ -210,6 +274,51 @@ char* read(char* filename) {
   }
 
   return buffer;
+}
+
+/**
+ * useful when we put things into, and take things out of, the
+ * environment. for number and function s we can just copy the relevant
+ * fields directly. for strings we need to copy using `malloc` and
+ * `strcpy`. to copy lists we need to allocate the correct amount of
+ * space and then copy each element individually.
+ */
+lval* lval_copy(lval* source) {
+  lval* target = malloc(sizeof(lval));
+  target->type = source->type;
+
+  switch (source->type) {
+    case LVAL_FUN:
+      target->fun = source->fun;
+      break;
+
+    case LVAL_NUM:
+      target->num = source->num;
+      break;
+
+    case LVAL_ERR:
+      target->err = malloc(strlen(source->err) + 1);
+      strcpy(target->err, source->err);
+      break;
+
+    case LVAL_SYM:
+      target->sym = malloc(strlen(source->sym) + 1);
+      strcpy(target->sym, source->sym);
+      break;
+
+    case LVAL_SEXPR:
+    case LVAL_QEXPR:
+      target->count = source->count;
+      target->cell = malloc(sizeof(lval*) * target->count);
+
+      for (int i = 0; i < target->count; i++) {
+        target->cell[i] = lval_copy(source->cell[i]);
+      }
+
+      break;
+  }
+
+  return target;
 }
 
 /**
