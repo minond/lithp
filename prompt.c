@@ -557,6 +557,36 @@ lval* builtin_op(lenv* env, lval* val, char* op) {
 }
 
 /**
+ * this function should act like any other builtin. it first checks for error
+ * conditions and then performs some command and returns a value. in this case
+ * it first checks that the input arguments are the correct types. it then
+ * iterates over each symbol and value and puts them into the environment. if
+ * there is an error we can return it, but on success we will return the empty
+ * expression `()`.
+ */
+lval* builtin_def(lenv* env, lval* args) {
+  LASSERT(args, args->cell[0]->type == LVAL_QEXPR,
+    "Function 'def' expects a Q-Expression.");
+
+  lval* syms = args->cell[0];
+
+  for (int i = 0; i < syms->count; i++) {
+    LASSERT(args, syms->cell[i]->type == LVAL_SYM,
+      "Function 'def' cannot define non-symbol");
+  }
+
+  LASSERT(args, syms->count == args->count - 1,
+    "Function 'def' cannot define incorrect number of values to symbols");
+
+  for (int i = 0; i < syms->count; i++) {
+    lenv_put(env, syms->cell[i], args->cell[i + 1]);
+  }
+
+  lval_del(args);
+  return lval_sexpr();
+}
+
+/**
  * the environment always takes or returns copies of a value, so we need to
  * remember to delete these two `lval` after registration as we won't need them
  * any more.
@@ -571,6 +601,8 @@ void lenv_add_builtin(lenv* env, char* name, lbuiltin func) {
 }
 
 void lenv_add_builtins(lenv* env) {
+  lenv_add_builtin(env, "def", builtin_def);
+
   lenv_add_builtin(env, "list", builtin_list);
   lenv_add_builtin(env, "head", builtin_head);
   lenv_add_builtin(env, "tail", builtin_tail);
