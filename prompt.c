@@ -4,6 +4,7 @@
 #include "readline.h"
 #include "vendor/mpc/mpc.h"
 
+#define UNUSED(x) (void)(x)
 #define LASSERT(args, cond, err) \
   if (!(cond)) { lval_del(args); return lval_err(err); }
 
@@ -45,9 +46,11 @@ struct lenv {
 };
 
 lval* lval_pop(lval*, int);
-lval* lval_eval(lval*);
+lval* lval_eval(lenv*, lval*);
 lval* lval_copy(lval*);
 void lval_print(lval*);
+
+lval* builtin_op(lenv*, lval*, char*);
 
 lval* lval_qexpr(void) {
   lval* val = malloc(sizeof(lval));
@@ -57,10 +60,10 @@ lval* lval_qexpr(void) {
   return val;
 }
 
-lval* lval_fun(void) {
+lval* lval_fun(lbuiltin func) {
   lval* val = malloc(sizeof(lval));
   val->type = LVAL_FUN;
-  val->cell = NULL;
+  val->fun = func;
   val->count = 0;
   return val;
 }
@@ -140,14 +143,44 @@ void lenv_del(lenv* env) {
  * if we find a match we can return a copy of the stored value. if no match is
  * found we should return an error.
  */
-lval* lenv_get(lenv* env, lval* loopup) {
+lval* lenv_get(lenv* env, lval* label) {
   for (int i = 0; i < env->count; i++) {
-    if (strcpy(env->syms[i], loopup->sym) == 0) {
+    if (strcmp(env->syms[i], label->sym) == 0) {
       return lval_copy(env->vals[i]);
     }
   }
 
-  return lval_err("Unbound symbol!");
+  return lval_err("unbound symbol!");
+}
+
+/**
+ * the function for putting new variables into the environment is a little bit
+ * more complex. first we want to check if a variable with the same name
+ * already exists. if this is the case we should replace its value with the new
+ * one. to do this we loop over all the existing variables in the environment
+ * and check their name. if a match is found we delete the value stored at that
+ * location, and store there a copy of the input value. if no existing value is
+ * found with that name, we need to allocate some more space to out it in. for
+ * this we can use `realloc`, and store a copy of the `lval` and its name at
+ * the newly allocated locations.
+ */
+void lenv_put(lenv* env, lval* label, lval* value) {
+  for (int i = 0; i < env->count; i++) {
+    if (strcmp(env->syms[i], label->sym) == 0) {
+      lval_del(env->vals[i]);
+      env->vals[i] = lval_copy(value);
+      return;
+    }
+  }
+
+  env->count++;
+
+  env->vals = realloc(env->vals, sizeof(lval*) * env->count);
+  env->syms = realloc(env->syms, sizeof(char*) * env->count);
+
+  env->vals[env->count - 1] = lval_copy(value);
+  env->syms[env->count - 1] = malloc(strlen(label->sym) + 1);
+  strcpy(env->syms[env->count - 1], label->sym);
 }
 
 lval* lval_read_num(mpc_ast_t* t) {
@@ -244,7 +277,7 @@ void lval_print(lval* val) {
       break;
 
     case LVAL_ERR:
-      printf("error: %s", val->err);
+      printf("Error: %s", val->err);
       break;
   }
 }
@@ -354,7 +387,9 @@ lval* lval_take(lval* val, int i) {
   return child;
 }
 
-lval* builtin_head(lval* args) {
+lval* builtin_head(lenv* env, lval* args) {
+  UNUSED(env);
+
   LASSERT(args, args->count == 1,
     "Function 'head' expects one argument.");
   LASSERT(args, args->cell[0]->type == LVAL_QEXPR,
@@ -373,7 +408,9 @@ lval* builtin_head(lval* args) {
   return arg;
 }
 
-lval* builtin_tail(lval* args) {
+lval* builtin_tail(lenv* env, lval* args) {
+  UNUSED(env);
+
   LASSERT(args, args->count == 1,
     "Function 'tail' expects one argument.");
   LASSERT(args, args->cell[0]->type == LVAL_QEXPR,
@@ -388,12 +425,13 @@ lval* builtin_tail(lval* args) {
   return arg;
 }
 
-lval* builtin_list(lval* args) {
+lval* builtin_list(lenv* env, lval* args) {
+  UNUSED(env);
   args->type = LVAL_QEXPR;
   return args;
 }
 
-lval* builtin_eval(lval* args) {
+lval* builtin_eval(lenv* env, lval* args) {
   LASSERT(args, args->count == 1,
     "Function 'eval' expects one argument.");
   LASSERT(args, args->cell[0]->type == LVAL_QEXPR,
@@ -402,10 +440,12 @@ lval* builtin_eval(lval* args) {
   lval* arg = lval_take(args, 0);
   arg->type = LVAL_SEXPR;
 
-  return lval_eval(arg);
+  return lval_eval(env, arg);
 }
 
-lval* builtin_join(lval* args) {
+lval* builtin_join(lenv* env, lval* args) {
+  UNUSED(env);
+
   for (int i = 0; i < args->count; i++) {
     LASSERT(args, args->cell[i]->type == LVAL_QEXPR,
       "Function 'join' expects only Q-Expressions.");
@@ -422,7 +462,9 @@ lval* builtin_join(lval* args) {
   return joined;
 }
 
-lval* builtin_cons(lval* args) {
+lval* builtin_cons(lenv* env, lval* args) {
+  UNUSED(env);
+
   LASSERT(args, args->count == 2,
     "Function 'cons' expects two argument.");
   LASSERT(args, args->cell[1]->type == LVAL_QEXPR,
@@ -439,7 +481,9 @@ lval* builtin_cons(lval* args) {
   return list;
 }
 
-lval* builtin_len(lval* args) {
+lval* builtin_len(lenv* env, lval* args) {
+  UNUSED(env);
+
   LASSERT(args, args->count == 1,
     "Function 'len' expects one argument.");
   LASSERT(args, args->cell[0]->type == LVAL_QEXPR,
@@ -451,7 +495,25 @@ lval* builtin_len(lval* args) {
   return lval_num(len);
 }
 
-lval* builtin_op(lval* val, char* op) {
+lval* builtin_add(lenv* env, lval* val) {
+  return builtin_op(env, val, "+");
+}
+
+lval* builtin_sub(lenv* env, lval* val) {
+  return builtin_op(env, val, "-");
+}
+
+lval* builtin_mul(lenv* env, lval* val) {
+  return builtin_op(env, val, "*");
+}
+
+lval* builtin_div(lenv* env, lval* val) {
+  return builtin_op(env, val, "/");
+}
+
+lval* builtin_op(lenv* env, lval* val, char* op) {
+  UNUSED(env);
+
   for (int i = 0; i < val->count; i++) {
     if (val->cell[i]->type != LVAL_NUM) {
       lval_del(val);
@@ -494,33 +556,36 @@ lval* builtin_op(lval* val, char* op) {
   return head;
 }
 
-lval* builtin(lval* args, char* func) {
-  if (strcmp("list", func) == 0) {
-    return builtin_list(args);
-  } else if (strcmp("head", func) == 0) {
-    return builtin_head(args);
-  } else if (strcmp("tail", func) == 0) {
-    return builtin_tail(args);
-  } else if (strcmp("join", func) == 0) {
-    return builtin_join(args);
-  } else if (strcmp("eval", func) == 0) {
-    return builtin_eval(args);
-  } else if (strcmp("len", func) == 0) {
-    return builtin_len(args);
-  } else if (strcmp("cons", func) == 0) {
-    return builtin_cons(args);
-  } else if (strstr("+-/*", func)) {
-    return builtin_op(args, func);
-  }
+/**
+ * the environment always takes or returns copies of a value, so we need to
+ * remember to delete these two `lval` after registration as we won't need them
+ * any more.
+ */
+void lenv_add_builtin(lenv* env, char* name, lbuiltin func) {
+  lval* label = lval_sym(name);
+  lval* value = lval_fun(func);
 
-  lval_del(args);
-
-  return lval_err(strcat("Unknow function: ", func));
+  lenv_put(env, label, value);
+  lval_del(label);
+  lval_del(value);
 }
 
-lval* lval_eval_sexpr(lval* val) {
+void lenv_add_builtins(lenv* env) {
+  lenv_add_builtin(env, "list", builtin_list);
+  lenv_add_builtin(env, "head", builtin_head);
+  lenv_add_builtin(env, "tail", builtin_tail);
+  lenv_add_builtin(env, "eval", builtin_eval);
+  lenv_add_builtin(env, "join", builtin_join);
+
+  lenv_add_builtin(env, "+", builtin_add);
+  lenv_add_builtin(env, "-", builtin_sub);
+  lenv_add_builtin(env, "*", builtin_mul);
+  lenv_add_builtin(env, "/", builtin_div);
+}
+
+lval* lval_eval_sexpr(lenv* env, lval* val) {
   for (int i = 0; i < val->count; i++) {
-    val->cell[i] = lval_eval(val->cell[i]);
+    val->cell[i] = lval_eval(env, val->cell[i]);
   }
 
   for (int i = 0; i < val->count; i++) {
@@ -539,21 +604,27 @@ lval* lval_eval_sexpr(lval* val) {
 
   lval* head = lval_pop(val, 0);
 
-  if (head->type != LVAL_SYM) {
+  if (head->type != LVAL_FUN) {
     lval_del(head);
     lval_del(val);
-    return lval_err("s-expression does not start with symbol");
+    return lval_err("first element is not a function");
   }
 
-  lval* result = builtin(val, head->sym);
+  lval* result = head->fun(env, val);
   lval_del(head);
 
   return result;
 }
 
-lval* lval_eval(lval* val) {
+lval* lval_eval(lenv* env, lval* val) {
+  if (val->type == LVAL_SYM) {
+    lval* ret = lenv_get(env, val);
+    lval_del(val);
+    return ret;
+  }
+
   if (val->type == LVAL_SEXPR) {
-    return lval_eval_sexpr(val);
+    return lval_eval_sexpr(env, val);
   }
 
   return val;
@@ -578,6 +649,9 @@ int main() {
     Number, Symbol, Sexpr, Qexpr, Expr, Lithp);
   free(grammar);
 
+  lenv* env = lenv_new();
+  lenv_add_builtins(env);
+
   printf("Lithp Version %s\n", VERSION);
   printf("Press Ctrl+c to Exit\n\n");
 
@@ -586,7 +660,7 @@ int main() {
     char* input = readline(PROMPT);
 
     if (mpc_parse("<stdin>", input, Lithp, &result)) {
-      lval* val = lval_eval(lval_read(result.output));
+      lval* val = lval_eval(env, lval_read(result.output));
       lval_println(val);
       lval_del(val);
       mpc_ast_delete(result.output);
@@ -599,6 +673,7 @@ int main() {
     free(input);
   }
 
+  lenv_del(env);
   mpc_cleanup(6, Number, Symbol, Sexpr, Qexpr, Expr, Lithp);
 
   return 0;
