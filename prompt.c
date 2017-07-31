@@ -5,12 +5,23 @@
 #include "vendor/mpc/mpc.h"
 
 #define UNUSED(x) (void)(x)
+
 #define LASSERT(args, cond, fmt, ...) \
   if (!(cond)) { \
     lval* err = lval_err(fmt, ##__VA_ARGS__); \
     lval_del(args); \
     return err; \
   }
+
+#define LASSERT_ARG_COUNT(args, func, expected) \
+  LASSERT(args, expected == args->count, \
+    "Function '%s' expects %i argument but got %i.", \
+      func, expected, args->count);
+
+#define LASSERT_ARG_TYPE_AT(args, func, expected, index) \
+  LASSERT(args, args->cell[index]->type == expected, \
+    "Function '%s' expects a %s but got (a/an) %s at index %i instead.", \
+      func, ltype_name(expected), ltype_name(args->cell[index]->type), index);
 
 const char* PROMPT = "lithp> ";
 const char* VERSION = "0.0.0";
@@ -414,10 +425,8 @@ lval* lval_take(lval* val, int i) {
 lval* builtin_head(lenv* env, lval* args) {
   UNUSED(env);
 
-  LASSERT(args, args->count == 1,
-    "Function 'head' expects one argument but got %i.", args->count);
-  LASSERT(args, args->cell[0]->type == LVAL_QEXPR,
-    "Function 'tail' expects a Q-Expression but got (a/an) %s instead.", ltype_name(args->cell[0]->type));
+  LASSERT_ARG_COUNT(args, "head", 1);
+  LASSERT_ARG_TYPE_AT(args, "head", LVAL_QEXPR, 0);
   LASSERT(args, args->cell[0]->count != 0,
     "Function 'head' passed an empty Q-Expression.");
 
@@ -435,10 +444,8 @@ lval* builtin_head(lenv* env, lval* args) {
 lval* builtin_tail(lenv* env, lval* args) {
   UNUSED(env);
 
-  LASSERT(args, args->count == 1,
-    "Function 'tail' expects one argument but got %i.", args->count);
-  LASSERT(args, args->cell[0]->type == LVAL_QEXPR,
-    "Function 'tail' expects a Q-Expression but got (a/an) %s instead.", ltype_name(args->cell[0]->type));
+  LASSERT_ARG_COUNT(args, "tail", 1);
+  LASSERT_ARG_TYPE_AT(args, "tail", LVAL_QEXPR, 0);
   LASSERT(args, args->cell[0]->count != 0,
     "Function 'tail' passed an empty Q-Expression.");
 
@@ -456,10 +463,8 @@ lval* builtin_list(lenv* env, lval* args) {
 }
 
 lval* builtin_eval(lenv* env, lval* args) {
-  LASSERT(args, args->count == 1,
-    "Function 'eval' expects one argument but got %i.", args->count);
-  LASSERT(args, args->cell[0]->type == LVAL_QEXPR,
-    "Function 'eval' expects a Q-Expression but got (a/an) %s instead.", ltype_name(args->cell[0]->type));
+  LASSERT_ARG_COUNT(args, "eval", 1);
+  LASSERT_ARG_TYPE_AT(args, "eval", LVAL_QEXPR, 0);
 
   lval* arg = lval_take(args, 0);
   arg->type = LVAL_SEXPR;
@@ -471,9 +476,7 @@ lval* builtin_join(lenv* env, lval* args) {
   UNUSED(env);
 
   for (int i = 0; i < args->count; i++) {
-    LASSERT(args, args->cell[i]->type == LVAL_QEXPR,
-      "Function 'join' expects only Q-Expressions but got (a/an) %s instead in index %i.",
-        ltype_name(args->cell[1]->type), i);
+    LASSERT_ARG_TYPE_AT(args, "join", LVAL_QEXPR, i);
   }
 
   lval* joined = lval_pop(args, 0);
@@ -490,10 +493,8 @@ lval* builtin_join(lenv* env, lval* args) {
 lval* builtin_cons(lenv* env, lval* args) {
   UNUSED(env);
 
-  LASSERT(args, args->count == 2,
-    "Function 'cons' expects two arguments but got %i.", args->count);
-  LASSERT(args, args->cell[1]->type == LVAL_QEXPR,
-    "Function 'cons' expects a value and a Q-Expression but got (a/an) %s instead.", ltype_name(args->cell[1]->type));
+  LASSERT_ARG_COUNT(args, "cons", 2);
+  LASSERT_ARG_TYPE_AT(args, "cons", LVAL_QEXPR, 1);
 
   lval* list = lval_sexpr();
   lval* head = lval_pop(args, 0);
@@ -509,10 +510,8 @@ lval* builtin_cons(lenv* env, lval* args) {
 lval* builtin_len(lenv* env, lval* args) {
   UNUSED(env);
 
-  LASSERT(args, args->count == 1,
-    "Function 'len' expects two arguments but got %i.", args->count);
-  LASSERT(args, args->cell[0]->type == LVAL_QEXPR,
-    "Function 'len' expects a Q-Expression but got (a/an) %s instead.", ltype_name(args->cell[0]->type));
+  LASSERT_ARG_COUNT(args, "len", 1);
+  LASSERT_ARG_TYPE_AT(args, "len", LVAL_QEXPR, 0);
 
   long len = args->cell[0]->count;
   lval_del(args);
@@ -593,8 +592,7 @@ lval* builtin_op(lenv* env, lval* val, char* op) {
  * expression `()`.
  */
 lval* builtin_def(lenv* env, lval* args) {
-  LASSERT(args, args->cell[0]->type == LVAL_QEXPR,
-    "Function 'def' expects a Q-Expression.");
+  LASSERT_ARG_TYPE_AT(args, "def", LVAL_QEXPR, 0);
 
   lval* syms = args->cell[0];
 
