@@ -5,8 +5,12 @@
 #include "vendor/mpc/mpc.h"
 
 #define UNUSED(x) (void)(x)
-#define LASSERT(args, cond, err) \
-  if (!(cond)) { lval_del(args); return lval_err(err); }
+#define LASSERT(args, cond, fmt, ...) \
+  if (!(cond)) { \
+    lval* err = lval_err(fmt, ##__VA_ARGS__); \
+    lval_del(args); \
+    return err; \
+  }
 
 const char* PROMPT = "lithp> ";
 const char* VERSION = "0.0.0";
@@ -91,10 +95,18 @@ lval* lval_num(long num) {
   return val;
 }
 
-lval* lval_err(char* err) {
+lval* lval_err(char* fmt, ...) {
   lval* val = malloc(sizeof(lval));
   val->type = LVAL_ERR;
-  val->err = err;
+
+  va_list args;
+  va_start(args, fmt);
+
+  val->err = malloc(512);
+  vsnprintf(val->err, 511, fmt, args);
+  val->err = realloc(val->err, strlen(val->err) + 1);
+
+  va_end(args);
   return val;
 }
 
@@ -150,7 +162,7 @@ lval* lenv_get(lenv* env, lval* label) {
     }
   }
 
-  return lval_err("unbound symbol!");
+  return lval_err("Unbound symbol '%s'!", label->sym);
 }
 
 /**
@@ -252,6 +264,18 @@ void lval_expr_print(lval* val, char open, char close) {
   }
 
   putchar(close);
+}
+
+char* ltype_name(lval_type type) {
+  switch (type) {
+    case LVAL_FUN: return "Function";
+    case LVAL_SYM: return "Symbol";
+    case LVAL_SEXPR: return "S-Expression";
+    case LVAL_QEXPR: return "Q-Expression";
+    case LVAL_NUM: return "Number";
+    case LVAL_ERR: return "Error";
+    default: return "Unknown type";
+  }
 }
 
 void lval_print(lval* val) {
@@ -391,9 +415,9 @@ lval* builtin_head(lenv* env, lval* args) {
   UNUSED(env);
 
   LASSERT(args, args->count == 1,
-    "Function 'head' expects one argument.");
+    "Function 'head' expects one argument but got %i.", args->count);
   LASSERT(args, args->cell[0]->type == LVAL_QEXPR,
-    "Function 'head' expects a Q-Expression.");
+    "Function 'tail' expects a Q-Expression but got (a/an) %s instead.", ltype_name(args->cell[0]->type));
   LASSERT(args, args->cell[0]->count != 0,
     "Function 'head' passed an empty Q-Expression.");
 
@@ -412,9 +436,9 @@ lval* builtin_tail(lenv* env, lval* args) {
   UNUSED(env);
 
   LASSERT(args, args->count == 1,
-    "Function 'tail' expects one argument.");
+    "Function 'tail' expects one argument but got %i.", args->count);
   LASSERT(args, args->cell[0]->type == LVAL_QEXPR,
-    "Function 'tail' expects a Q-Expression.");
+    "Function 'tail' expects a Q-Expression but got (a/an) %s instead.", ltype_name(args->cell[0]->type));
   LASSERT(args, args->cell[0]->count != 0,
     "Function 'tail' passed an empty Q-Expression.");
 
@@ -433,9 +457,9 @@ lval* builtin_list(lenv* env, lval* args) {
 
 lval* builtin_eval(lenv* env, lval* args) {
   LASSERT(args, args->count == 1,
-    "Function 'eval' expects one argument.");
+    "Function 'eval' expects one argument but got %i.", args->count);
   LASSERT(args, args->cell[0]->type == LVAL_QEXPR,
-    "Function 'eval' expects a Q-Expression.");
+    "Function 'eval' expects a Q-Expression but got (a/an) %s instead.", ltype_name(args->cell[0]->type));
 
   lval* arg = lval_take(args, 0);
   arg->type = LVAL_SEXPR;
@@ -448,7 +472,8 @@ lval* builtin_join(lenv* env, lval* args) {
 
   for (int i = 0; i < args->count; i++) {
     LASSERT(args, args->cell[i]->type == LVAL_QEXPR,
-      "Function 'join' expects only Q-Expressions.");
+      "Function 'join' expects only Q-Expressions but got (a/an) %s instead in index %i.",
+        ltype_name(args->cell[1]->type), i);
   }
 
   lval* joined = lval_pop(args, 0);
@@ -466,9 +491,9 @@ lval* builtin_cons(lenv* env, lval* args) {
   UNUSED(env);
 
   LASSERT(args, args->count == 2,
-    "Function 'cons' expects two argument.");
+    "Function 'cons' expects two arguments but got %i.", args->count);
   LASSERT(args, args->cell[1]->type == LVAL_QEXPR,
-    "Function 'cons' expects a value and a Q-Expression.");
+    "Function 'cons' expects a value and a Q-Expression but got (a/an) %s instead.", ltype_name(args->cell[1]->type));
 
   lval* list = lval_sexpr();
   lval* head = lval_pop(args, 0);
@@ -485,9 +510,9 @@ lval* builtin_len(lenv* env, lval* args) {
   UNUSED(env);
 
   LASSERT(args, args->count == 1,
-    "Function 'len' expects one argument.");
+    "Function 'len' expects two arguments but got %i.", args->count);
   LASSERT(args, args->cell[0]->type == LVAL_QEXPR,
-    "Function 'len' expects a Q-Expression.");
+    "Function 'len' expects a Q-Expression but got (a/an) %s instead.", ltype_name(args->cell[0]->type));
 
   long len = args->cell[0]->count;
   lval_del(args);
@@ -516,8 +541,11 @@ lval* builtin_op(lenv* env, lval* val, char* op) {
 
   for (int i = 0; i < val->count; i++) {
     if (val->cell[i]->type != LVAL_NUM) {
+      lval* err = lval_err("Function '%s' expects a %s but got (a/an) %s instead on index %i.",
+        op, ltype_name(LVAL_NUM), ltype_name(val->cell[i]->type), i);
+
       lval_del(val);
-      return lval_err("cannot operate on a non-number");
+      return err;
     }
   }
 
