@@ -608,6 +608,8 @@ void lenv_add_builtins(lenv* env) {
   lenv_add_builtin(env, "tail", builtin_tail);
   lenv_add_builtin(env, "eval", builtin_eval);
   lenv_add_builtin(env, "join", builtin_join);
+  lenv_add_builtin(env, "cons", builtin_cons);
+  lenv_add_builtin(env, "len",  builtin_len);
 
   lenv_add_builtin(env, "+", builtin_add);
   lenv_add_builtin(env, "-", builtin_sub);
