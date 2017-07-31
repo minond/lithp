@@ -658,6 +658,9 @@ lval* lval_eval_sexpr(lenv* env, lval* val) {
     return val;
   }
 
+  // LVAL_FUN to handle function calls with no arguments
+  // if (val->count == 1 && val->cell[0]->type != LVAL_FUN) {
+  // seg fault on `+` for some reason!
   if (val->count == 1) {
     return lval_take(val, 0);
   }
