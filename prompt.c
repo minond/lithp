@@ -323,7 +323,15 @@ char* ltype_name(lval_type type) {
 void lval_print(lval* val) {
   switch (val->type) {
     case LVAL_FUN:
-      printf("<function>");
+      if (val->builtin) {
+        printf("<builtin>");
+      } else {
+        printf("(\\ ");
+        lval_print(val->formals);
+        putchar(' ');
+        lval_print(val->body);
+        putchar(')');
+      }
       break;
 
     case LVAL_SYM:
@@ -641,6 +649,35 @@ lval* builtin_def(lenv* env, lval* args) {
 
   lval_del(args);
   return lval_sexpr();
+}
+
+/**
+ * we can now add a builtin for our lambda function. we want it to take as
+ * input some list of symbols, and a list that represents the code. after that
+ * it should return a function lval. we've defined a few of builtins now, and
+ * this one will follow the same format. like in `def` we do some error
+ * checking to ensure that argument types and count are correct. then we just
+ * pop the first two arguments from the list and pass them to our previously
+ * defined function `lval_lambda`.
+ */
+lval* builtin_lambda(lenv* env, lval* args) {
+  UNUSED(env);
+
+  LASSERT_ARG_COUNT(args, "\\", 2);
+  LASSERT_ARG_TYPE_AT(args, "\\", 0, LVAL_QEXPR);
+  LASSERT_ARG_TYPE_AT(args, "\\", 1, LVAL_QEXPR);
+
+  for (int i = 0; i < args->cell[0]->count; i++) {
+    LASSERT(args, args->cell[0]->cell[i]->type == LVAL_SYM,
+      "Cannot define non-symbol. Got %s but expected %s",
+        ltype_name(args->cell[0]->cell[i]->type), ltype_name(LVAL_SYM));
+  }
+
+  lval* formals = lval_pop(args, 0);
+  lval* body = lval_pop(args, 0);
+
+  lval_del(args);
+  return lval_lambda(formals, body);
 }
 
 /**
