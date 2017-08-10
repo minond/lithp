@@ -680,25 +680,40 @@ lval* builtin_op(lenv* env, lval* val, char* op) {
  * there is an error we can return it, but on success we will return the empty
  * expression `()`.
  */
-lval* builtin_def(lenv* env, lval* args) {
+lval* builtin_var(lenv* env, lval* args, char* func) {
   LASSERT_ARG_TYPE_AT(args, "def", LVAL_QEXPR, 0);
 
   lval* syms = args->cell[0];
 
   for (int i = 0; i < syms->count; i++) {
     LASSERT(args, syms->cell[i]->type == LVAL_SYM,
-      "Function 'def' cannot define non-symbol");
+      "Function '%s' cannot define non-symbol. Got %s but expected %s.",
+        func, ltype_name(syms->cell[i]->type), ltype_name(LVAL_SYM));
   }
 
   LASSERT(args, syms->count == args->count - 1,
     "Function 'def' cannot define incorrect number of values to symbols");
 
   for (int i = 0; i < syms->count; i++) {
-    lenv_put(env, syms->cell[i], args->cell[i + 1]);
+    if (strcmp(func, "def") == 0) {
+      lenv_def(env, syms->cell[i], args->cell[i + 1]);
+    }
+
+    if (strcmp(func, "=") == 0) {
+      lenv_put(env, syms->cell[i], args->cell[i + 1]);
+    }
   }
 
   lval_del(args);
   return lval_sexpr();
+}
+
+lval* builtin_def(lenv* env, lval* args) {
+  return builtin_var(env, args, "def");
+}
+
+lval* builtin_put(lenv* env, lval* args) {
+  return builtin_var(env, args, "=");
 }
 
 /**
@@ -746,6 +761,7 @@ void lenv_add_builtin(lenv* env, char* name, lbuiltin func) {
 
 void lenv_add_builtins(lenv* env) {
   lenv_add_builtin(env, "def", builtin_def);
+  lenv_add_builtin(env, "def", builtin_put);
 
   lenv_add_builtin(env, "list", builtin_list);
   lenv_add_builtin(env, "head", builtin_head);
