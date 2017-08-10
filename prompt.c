@@ -45,11 +45,18 @@ typedef enum {
 struct lval {
   lval_type type;
 
+  // basic
   long num;
   char* err;
   char* sym;
-  lbuiltin fun;
 
+  // function
+  lbuiltin builtin;
+  lenv* env;
+  lval* formals;
+  lval* body;
+
+  // expression
   int count;
   struct lval** cell;
 };
@@ -63,6 +70,8 @@ struct lenv {
 lval* lval_pop(lval*, int);
 lval* lval_eval(lenv*, lval*);
 lval* lval_copy(lval*);
+lenv* lenv_new();
+void lenv_del(lenv* env);
 void lval_print(lval*);
 
 lval* builtin_op(lenv*, lval*, char*);
@@ -78,7 +87,7 @@ lval* lval_qexpr(void) {
 lval* lval_fun(lbuiltin func) {
   lval* val = malloc(sizeof(lval));
   val->type = LVAL_FUN;
-  val->fun = func;
+  val->builtin = func;
   val->count = 0;
   return val;
 }
@@ -121,12 +130,34 @@ lval* lval_err(char* fmt, ...) {
   return val;
 }
 
+lval* lval_lambda(lval* formals, lval* body) {
+  lval* val = malloc(sizeof(lval));
+
+  val->type = LVAL_FUN;
+  val->builtin = NULL;
+  val->env = lenv_new();
+  val->formals = formals;
+  val->body = body;
+
+  return val;
+}
+
 void lval_del(lval* val) {
   switch (val->type) {
-    case LVAL_FUN: break;
     case LVAL_NUM: break;
     case LVAL_ERR: break;
-    case LVAL_SYM: free(val->sym); break;
+
+    case LVAL_SYM:
+      free(val->sym);
+      break;
+
+    case LVAL_FUN:
+      if (!val->builtin) {
+        lenv_del(val->env);
+        lval_del(val->formals);
+        lval_del(val->body);
+      }
+      break;
 
     case LVAL_SEXPR:
     case LVAL_QEXPR:
@@ -141,7 +172,7 @@ void lval_del(lval* val) {
   free(val);
 }
 
-lenv* lenv_new(void) {
+lenv* lenv_new() {
   lenv* env = malloc(sizeof(lenv));
   env->count = 0;
   env->syms = NULL;
@@ -357,7 +388,7 @@ lval* lval_copy(lval* source) {
 
   switch (source->type) {
     case LVAL_FUN:
-      target->fun = source->fun;
+      target->builtin = source->builtin;
       break;
 
     case LVAL_NUM:
@@ -673,7 +704,7 @@ lval* lval_eval_sexpr(lenv* env, lval* val) {
     return lval_err("first element is not a function");
   }
 
-  lval* result = head->fun(env, val);
+  lval* result = head->builtin(env, val);
   lval_del(head);
 
   return result;
