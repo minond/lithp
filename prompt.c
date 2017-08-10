@@ -63,6 +63,7 @@ struct lval {
 
 struct lenv {
   int count;
+  lenv* par;
   char** syms;
   lval** vals;
 };
@@ -175,6 +176,7 @@ void lval_del(lval* val) {
 lenv* lenv_new() {
   lenv* env = malloc(sizeof(lenv));
   env->count = 0;
+  env->par = NULL;
   env->syms = NULL;
   env->vals = NULL;
   return env;
@@ -204,7 +206,33 @@ lval* lenv_get(lenv* env, lval* label) {
     }
   }
 
-  return lval_err("Unbound symbol '%s'!", label->sym);
+  if (env->par) {
+    return lenv_get(env->par, label);
+  } else {
+    return lval_err("Unbound symbol '%s'!", label->sym);
+  }
+}
+
+/**
+ * because we have a new `lval` type that has it own environment we need a
+ * function for copying environments, to use for when we copy `lval` structs.
+ */
+lenv* lenv_copy(lenv* env) {
+  int count = env->count;
+  lenv* copy = malloc(sizeof(lenv));
+
+  copy->count = count;
+  copy->par = env->par;
+  copy->syms = malloc(sizeof(char*) * count);
+  copy->vals = malloc(sizeof(lval*) * count);
+
+  for (int i = 0; i < count; i++) {
+    copy->vals[i] = lval_copy(env->vals[i]);
+    copy->syms[i] = malloc(strlen(env->syms[i]) + 1);
+    strcpy(copy->syms[i], env->syms[i]);
+  }
+
+  return copy;
 }
 
 /**
@@ -235,6 +263,21 @@ void lenv_put(lenv* env, lval* label, lval* value) {
   env->vals[env->count - 1] = lval_copy(value);
   env->syms[env->count - 1] = malloc(strlen(label->sym) + 1);
   strcpy(env->syms[env->count - 1], label->sym);
+}
+
+/**
+ * having parent environments also changes our concept of defining a variable.
+ * there are two ways we could define a variable now. either we could define it
+ * in local, innermost environment., or we could define it in the global,
+ * outermost environment. we will add functions to do both. we'll leave the
+ * `lenv_put` method the same. it can be used for definition in the local
+ * environment. but we'll add a new function `lenv_def` for definition in the
+ * global environment. this works by simply following the parent chain up
+ * before using lval_put to define locally.
+ */
+void lenv_def(lenv* env, lval* label, lval* value) {
+  while (env->par) env = env->par;
+  lenv_put(env, label, value);
 }
 
 lval* lval_read_num(mpc_ast_t* t) {
@@ -396,7 +439,14 @@ lval* lval_copy(lval* source) {
 
   switch (source->type) {
     case LVAL_FUN:
-      target->builtin = source->builtin;
+      if (source->builtin) {
+        target->builtin = source->builtin;
+      } else {
+        target->builtin = NULL;
+        target->env = lenv_copy(source->env);
+        target->formals = lval_copy(source->formals);
+        target->body = lval_copy(source->body);
+      }
       break;
 
     case LVAL_NUM:
