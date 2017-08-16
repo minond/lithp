@@ -827,6 +827,31 @@ lval* lval_eval(lenv* env, lval* val) {
   return val;
 }
 
+/**
+ * we need to write the code that runs when an expression gets evaluated and a
+ * function `lval` is called. when this function type is a builtin we can call
+ * it as before, using the function pointer, but we need to do something
+ * separate for our user defined functions. we need to bind each of the
+ * arguments passed in, to each of the symbols in the `formals` field. once
+ * this is done we need to evaluate the `body` field. using the `env` field as
+ * an evironemnt, and the calling environment as a parent.
+ */
+lval* lval_call(lenv *env, lval* formals, lval* args) {
+  if (formals->builtin) {
+    return formals->builtin(env, args);
+  }
+
+  for (int i = 0; i < args->count; i++) {
+    lenv_put(formals->env, formals->formals->cell[i], args->cell[i]);
+  }
+
+  lval_del(args);
+  formals->env->par = env;
+
+  return builtin_eval(formals->env,
+    lval_add(lval_sexpr(), lval_copy(formals->body)));
+}
+
 int main() {
   char* grammar = read("grammar.txt");
 
