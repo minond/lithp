@@ -146,7 +146,10 @@ lval* lval_lambda(lval* formals, lval* body) {
 void lval_del(lval* val) {
   switch (val->type) {
     case LVAL_NUM: break;
-    case LVAL_ERR: break;
+
+    case LVAL_ERR:
+      free(val->err);
+      break;
 
     case LVAL_SYM:
       free(val->sym);
@@ -251,6 +254,8 @@ void lenv_put(lenv* env, lval* label, lval* value) {
     if (strcmp(env->syms[i], label->sym) == 0) {
       lval_del(env->vals[i]);
       env->vals[i] = lval_copy(value);
+      env->syms[i] = realloc(env->syms[i], strlen(label->sym) + 1);
+      strcpy(env->syms[i], label->sym);
       return;
     }
   }
