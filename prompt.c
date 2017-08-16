@@ -734,8 +734,8 @@ lval* builtin_lambda(lenv* env, lval* args) {
   UNUSED(env);
 
   LASSERT_ARG_COUNT(args, "\\", 2);
-  LASSERT_ARG_TYPE_AT(args, "\\", 0, LVAL_QEXPR);
-  LASSERT_ARG_TYPE_AT(args, "\\", 1, LVAL_QEXPR);
+  LASSERT_ARG_TYPE_AT(args, "\\", LVAL_QEXPR, 0);
+  LASSERT_ARG_TYPE_AT(args, "\\", LVAL_QEXPR, 1);
 
   for (int i = 0; i < args->cell[0]->count; i++) {
     LASSERT(args, args->cell[0]->cell[i]->type == LVAL_SYM,
