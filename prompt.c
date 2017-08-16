@@ -68,6 +68,7 @@ struct lenv {
   lval** vals;
 };
 
+lval* lval_call(lenv*, lval*, lval*);
 lval* lval_pop(lval*, int);
 lval* lval_eval(lenv*, lval*);
 lval* lval_copy(lval*);
@@ -807,7 +808,7 @@ lval* lval_eval_sexpr(lenv* env, lval* val) {
     return lval_err("first element is not a function");
   }
 
-  lval* result = head->builtin(env, val);
+  lval* result = lval_call(env, head, val);
   lval_del(head);
 
   return result;
@@ -836,20 +837,47 @@ lval* lval_eval(lenv* env, lval* val) {
  * this is done we need to evaluate the `body` field. using the `env` field as
  * an evironemnt, and the calling environment as a parent.
  */
-lval* lval_call(lenv *env, lval* formals, lval* args) {
+lval* lval_call(lenv* env, lval* formals, lval* args) {
   if (formals->builtin) {
     return formals->builtin(env, args);
   }
 
-  for (int i = 0; i < args->count; i++) {
-    lenv_put(formals->env, formals->formals->cell[i], args->cell[i]);
+  int given = args->count;
+  int total = formals->formals->count;
+
+  while (args->count) {
+    // if we've ran out of formal arguments to bind
+    if (formals->formals->count == 0) {
+      lval_del(args);
+
+      return lval_err("Function passed too many arguments. Got %i but expected %i",
+        given, total);
+    }
+
+    // pop the first symbol from the formals and pop the next arugment from the
+    // arguments list
+    lval* sym = lval_pop(formals->formals, 0);
+    lval* val = lval_pop(args, 0);
+
+    // bind a copy into the function's environment and then free them
+    lenv_put(formals->env, sym, val);
+    lval_del(sym);
+    lval_del(val);
   }
 
+  // arguments list is now bound so we can clean up
   lval_del(args);
-  formals->env->par = env;
 
-  return builtin_eval(formals->env,
-    lval_add(lval_sexpr(), lval_copy(formals->body)));
+  if (formals->formals->count == 0) {
+    formals->env->par = env;
+
+    // if all formals have been bond, evaluate and return
+    return builtin_eval(formals->env,
+      lval_add(lval_sexpr(), lval_copy(formals->body)));
+  } else {
+    // otherwise return partially evaluated function
+    return lval_copy(formals);
+  }
 }
 
 int main() {
