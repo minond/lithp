@@ -3,15 +3,17 @@
 
 #include "readline.h"
 
-#ifdef _WIN32
+#if defined(_WIN32) || defined(__linux__)
 #include <string.h>
 
-const size_t INPUT_SIZE = 2048;
+#define INPUT_SIZE 2048
 static char INPUT[INPUT_SIZE];
 
-void add_history(char * ignore) {}
+void add_history(char * ignore) {
+  (void) ignore;
+}
 
-char * readline(char * prompt) {
+char * readline(const char * prompt) {
   fputs(prompt, stdout);
   fgets(INPUT, INPUT_SIZE, stdin);
 
