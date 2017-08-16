@@ -86,11 +86,10 @@ lval* lval_qexpr(void) {
   return val;
 }
 
-lval* lval_fun(lbuiltin func) {
+lval* lval_builtin(lbuiltin func) {
   lval* val = malloc(sizeof(lval));
   val->type = LVAL_FUN;
   val->builtin = func;
-  val->count = 0;
   return val;
 }
 
@@ -682,7 +681,7 @@ lval* builtin_op(lenv* env, lval* val, char* op) {
  * expression `()`.
  */
 lval* builtin_var(lenv* env, lval* args, char* func) {
-  LASSERT_ARG_TYPE_AT(args, "def", LVAL_QEXPR, 0);
+  LASSERT_ARG_TYPE_AT(args, func, LVAL_QEXPR, 0);
 
   lval* syms = args->cell[0];
 
@@ -753,7 +752,7 @@ lval* builtin_lambda(lenv* env, lval* args) {
  */
 void lenv_add_builtin(lenv* env, char* name, lbuiltin func) {
   lval* label = lval_sym(name);
-  lval* value = lval_fun(func);
+  lval* value = lval_builtin(func);
 
   lenv_put(env, label, value);
   lval_del(label);
@@ -761,8 +760,9 @@ void lenv_add_builtin(lenv* env, char* name, lbuiltin func) {
 }
 
 void lenv_add_builtins(lenv* env) {
+  lenv_add_builtin(env, "\\",  builtin_lambda);
   lenv_add_builtin(env, "def", builtin_def);
-  lenv_add_builtin(env, "def", builtin_put);
+  lenv_add_builtin(env, "=", builtin_put);
 
   lenv_add_builtin(env, "list", builtin_list);
   lenv_add_builtin(env, "head", builtin_head);
