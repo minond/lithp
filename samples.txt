@@ -1,5 +1,13 @@
 def {fun} (\ {args body} {def (head args) (\ (tail args) body)})
 
-fun {add-together x y} {+ x y}
 
+fun {add-together x y} {+ x y}
 add-together 5345 6765
+
+
+fun {unpack f xs} {eval (join (list f) xs)}
+fun {pack f & xs} {f xs}
+
+
+def {uncurry} pack
+def {curry} unpack
