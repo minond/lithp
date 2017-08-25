@@ -77,6 +77,7 @@ void lenv_del(lenv* env);
 void lval_print(lval*);
 
 lval* builtin_op(lenv*, lval*, char*);
+lval* builtin_comp(lenv*, lval*, char*);
 
 lval* lval_qexpr(void) {
   lval* val = malloc(sizeof(lval));
@@ -634,7 +635,7 @@ lval* builtin_op(lenv* env, lval* val, char* op) {
 
   for (int i = 0; i < val->count; i++) {
     if (val->cell[i]->type != LVAL_NUM) {
-      lval* err = lval_err("Function '%s' expects a %s but got (a/an) %s instead on index %i.",
+      lval* err = lval_err("Arithmetic operator '%s' expects a %s but got (a/an) %s instead on index %i.",
         op, ltype_name(LVAL_NUM), ltype_name(val->cell[i]->type), i);
 
       lval_del(val);
@@ -675,6 +676,69 @@ lval* builtin_op(lenv* env, lval* val, char* op) {
 
   lval_del(val);
   return head;
+}
+
+lval* builtin_gt(lenv* env, lval* val) {
+  return builtin_comp(env, val, ">");
+}
+
+lval* builtin_ge(lenv* env, lval* val) {
+  return builtin_comp(env, val, ">=");
+}
+
+lval* builtin_lt(lenv* env, lval* val) {
+  return builtin_comp(env, val, "<");
+}
+
+lval* builtin_le(lenv* env, lval* val) {
+  return builtin_comp(env, val, "<=");
+}
+
+lval* builtin_eq(lenv* env, lval* val) {
+  return builtin_comp(env, val, "==");
+}
+
+lval* builtin_ne(lenv* env, lval* val) {
+  return builtin_comp(env, val, "!=");
+}
+
+lval* builtin_comp(lenv* env, lval* val, char* comp) {
+  UNUSED(env);
+
+  for (int i = 0; i < val->count; i++) {
+    if (val->cell[i]->type != LVAL_NUM) {
+      lval* err = lval_err("Comparison operator '%s' expects a %s but got (a/an) %s instead on index %i.",
+        comp, ltype_name(LVAL_NUM), ltype_name(val->cell[i]->type), i);
+
+      lval_del(val);
+      return err;
+    }
+  }
+
+  lval* left = lval_pop(val, 0);
+  lval* right = lval_pop(val, 0);
+  lval* result;
+
+  if (strcmp(comp, ">") == 0) {
+    result = lval_num(left->num > right->num ? 1 : 0);
+  } else if (strcmp(comp, "<") == 0) {
+    result = lval_num(left->num < right->num ? 1 : 0);
+  } else if (strcmp(comp, ">=") == 0) {
+    result = lval_num(left->num >= right->num ? 1 : 0);
+  } else if (strcmp(comp, "<=") == 0) {
+    result = lval_num(left->num <= right->num ? 1 : 0);
+  } else if (strcmp(comp, "==") == 0) {
+    result = lval_num(left->num == right->num ? 1 : 0);
+  } else if (strcmp(comp, "!=") == 0) {
+    result = lval_num(left->num != right->num ? 1 : 0);
+  } else {
+    result = lval_err("Unknown comparison operator: %s", comp);
+  }
+
+  lval_del(left);
+  lval_del(right);
+
+  return result;
 }
 
 /**
@@ -781,6 +845,13 @@ void lenv_add_builtins(lenv* env) {
   lenv_add_builtin(env, "-", builtin_sub);
   lenv_add_builtin(env, "*", builtin_mul);
   lenv_add_builtin(env, "/", builtin_div);
+
+  lenv_add_builtin(env, ">", builtin_gt);
+  lenv_add_builtin(env, ">=", builtin_ge);
+  lenv_add_builtin(env, "<", builtin_lt);
+  lenv_add_builtin(env, "<=", builtin_le);
+  lenv_add_builtin(env, "==", builtin_eq);
+  lenv_add_builtin(env, "!=", builtin_ne);
 }
 
 lval* lval_eval_sexpr(lenv* env, lval* val) {

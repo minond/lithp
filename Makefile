@@ -1,5 +1,5 @@
 CC = cc
-CFLAGS = -std=c99 -W -Wall -ledit
+CFLAGS = -std=c11 -W -Wall -ledit
 
 build:
 	$(CC) $(CFLAGS) prompt.c readline.c vendor/mpc/mpc.c -o lithp

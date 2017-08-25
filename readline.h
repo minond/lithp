@@ -1,3 +1,3 @@
-void add_history(char * line);
+int add_history(const char * line);
 
 char * readline(const char * prompt);
