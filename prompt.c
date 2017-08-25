@@ -517,6 +517,51 @@ lval* lval_take(lval* val, int i) {
   return child;
 }
 
+int lval_eq(lval* left, lval* right) {
+  if (left->type != right->type) {
+    return 0;
+  } else {
+    switch (left->type) {
+      case LVAL_FUN:
+        if (left->builtin || right->builtin) {
+          return left->builtin == right->builtin;
+        } else {
+          return lval_eq(left->formals, right->formals)
+            && lval_eq(left->body, right->body);
+        }
+
+        break;
+
+      case LVAL_SYM:
+        return strcmp(left->sym, right->sym) == 0;
+        break;
+
+      case LVAL_SEXPR:
+      case LVAL_QEXPR:
+        if (left->count != right->count) {
+          return 0;
+        }
+
+        for (int i = 0; i < left->count; i++) {
+          if (!lval_eq(left->cell[i], right->cell[i])) {
+            return 0;
+          }
+        }
+
+        return 1;
+        break;
+
+      case LVAL_NUM:
+        return left->num == right->num;
+        break;
+
+      case LVAL_ERR:
+        return strcmp(left->err, right->err) == 0;
+        break;
+    }
+  }
+}
+
 lval* builtin_head(lenv* env, lval* args) {
   UNUSED(env);
 
@@ -694,14 +739,6 @@ lval* builtin_le(lenv* env, lval* val) {
   return builtin_comp(env, val, "<=");
 }
 
-lval* builtin_eq(lenv* env, lval* val) {
-  return builtin_comp(env, val, "==");
-}
-
-lval* builtin_ne(lenv* env, lval* val) {
-  return builtin_comp(env, val, "!=");
-}
-
 lval* builtin_comp(lenv* env, lval* val, char* comp) {
   UNUSED(env);
 
@@ -739,6 +776,21 @@ lval* builtin_comp(lenv* env, lval* val, char* comp) {
   lval_del(right);
 
   return result;
+}
+
+lval* builtin_eq(lenv* env, lval* val) {
+  UNUSED(env);
+
+  lval* left = lval_pop(val, 0);
+  lval* right = lval_pop(val, 0);
+
+  return lval_num(lval_eq(left, right));
+}
+
+lval* builtin_ne(lenv* env, lval* val) {
+  lval* res = builtin_eq(env, val);
+  res->num = res->num ? 0 : 1;
+  return res;
 }
 
 /**
