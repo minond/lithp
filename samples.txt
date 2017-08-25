@@ -21,3 +21,11 @@ def {curry} unpack
   {if (== l {})
     {{}}
     {join (reverse (tail l)) (head l)}})
+
+; this is broken
+(fun {contains l item}
+  {if (== l {})
+    {0}
+    {if (== {item} (head l))
+      {1}
+      {contains (tail l) item}}})
