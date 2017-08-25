@@ -804,6 +804,18 @@ lval* builtin_if(lenv* env, lval* expression) {
   return resp;
 }
 
+lval* builtin_not(lenv* env, lval* val) {
+  UNUSED(env);
+
+  LASSERT_ARG_COUNT(val, "not", 1);
+  LASSERT_ARG_TYPE_AT(val, "not", LVAL_NUM, 0);
+
+  int opposite = val->cell[0]->num ? 0 : 1;
+
+  lval_del(val);
+  return lval_num(opposite);
+}
+
 lval* builtin_or(lenv* env, lval* val) {
   for (int i = 0; i < val->count; i++) {
     if (val->cell[i]->type != LVAL_NUM) {
@@ -992,6 +1004,9 @@ void lenv_add_builtins(lenv* env) {
   lenv_add_builtin(env, "&&", builtin_and);
   lenv_add_builtin(env, "or", builtin_or);
   lenv_add_builtin(env, "||", builtin_or);
+
+  lenv_add_builtin(env, "not", builtin_not);
+  lenv_add_builtin(env, "!", builtin_not);
 }
 
 lval* lval_eval_sexpr(lenv* env, lval* val) {
