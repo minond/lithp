@@ -804,6 +804,34 @@ lval* builtin_if(lenv* env, lval* expression) {
   return resp;
 }
 
+lval* builtin_and(lenv* env, lval* val) {
+  for (int i = 0; i < val->count; i++) {
+    if (val->cell[i]->type != LVAL_NUM) {
+      lval* err = lval_err("Expected '%s' but found '%s' on index %i.",
+        ltype_name(LVAL_NUM), ltype_name(val->cell[i]->type), i);
+
+      lval_del(val);
+      return err;
+    }
+  }
+
+  lval* cond;
+  lval* resp;
+
+  while (val->count) {
+    cond = lval_pop(val, 0);
+    resp = lval_eval(env, cond);
+
+    if (!resp->num) {
+      lval_del(val);
+      return lval_num(0);
+    }
+  }
+
+  lval_del(val);
+  return lval_num(1);
+}
+
 lval* builtin_eq(lenv* env, lval* val) {
   UNUSED(env);
 
@@ -931,6 +959,9 @@ void lenv_add_builtins(lenv* env) {
   lenv_add_builtin(env, "<=", builtin_le);
   lenv_add_builtin(env, "==", builtin_eq);
   lenv_add_builtin(env, "!=", builtin_ne);
+
+  lenv_add_builtin(env, "and", builtin_and);
+  lenv_add_builtin(env, "&&", builtin_and);
 }
 
 lval* lval_eval_sexpr(lenv* env, lval* val) {
