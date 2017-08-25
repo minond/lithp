@@ -780,6 +780,30 @@ lval* builtin_comp(lenv* env, lval* val, char* comp) {
   return lval_num(result);
 }
 
+lval* builtin_if(lenv* env, lval* expression) {
+  LASSERT_ARG_TYPE_AT(expression, "if", LVAL_NUM, 0);
+  LASSERT_ARG_TYPE_AT(expression, "if", LVAL_QEXPR, 1);
+  LASSERT_ARG_TYPE_AT(expression, "if", LVAL_QEXPR, 2);
+
+  lval* cond = lval_pop(expression, 0);
+  lval* pass = lval_pop(expression, 0);
+  lval* fail = lval_pop(expression, 0);
+  lval* resp;
+
+  pass->type = LVAL_SEXPR;
+  fail->type = LVAL_SEXPR;
+
+  if (cond->num) {
+    resp = lval_eval(env, pass);
+  } else {
+    resp = lval_eval(env, fail);
+  }
+
+  lval_del(expression);
+
+  return resp;
+}
+
 lval* builtin_eq(lenv* env, lval* val) {
   UNUSED(env);
 
@@ -900,6 +924,7 @@ void lenv_add_builtins(lenv* env) {
   lenv_add_builtin(env, "*", builtin_mul);
   lenv_add_builtin(env, "/", builtin_div);
 
+  lenv_add_builtin(env, "if", builtin_if);
   lenv_add_builtin(env, ">", builtin_gt);
   lenv_add_builtin(env, ">=", builtin_ge);
   lenv_add_builtin(env, "<", builtin_lt);
