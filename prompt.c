@@ -754,28 +754,30 @@ lval* builtin_comp(lenv* env, lval* val, char* comp) {
 
   lval* left = lval_pop(val, 0);
   lval* right = lval_pop(val, 0);
-  lval* result;
+  int result;
 
   if (strcmp(comp, ">") == 0) {
-    result = lval_num(left->num > right->num ? 1 : 0);
+    result = left->num > right->num;
   } else if (strcmp(comp, "<") == 0) {
-    result = lval_num(left->num < right->num ? 1 : 0);
+    result = left->num < right->num;
   } else if (strcmp(comp, ">=") == 0) {
-    result = lval_num(left->num >= right->num ? 1 : 0);
+    result = left->num >= right->num;
   } else if (strcmp(comp, "<=") == 0) {
-    result = lval_num(left->num <= right->num ? 1 : 0);
+    result = left->num <= right->num;
   } else if (strcmp(comp, "==") == 0) {
-    result = lval_num(left->num == right->num ? 1 : 0);
+    result = lval_eq(left, right);
   } else if (strcmp(comp, "!=") == 0) {
-    result = lval_num(left->num != right->num ? 1 : 0);
+    result = lval_eq(left, right) ? 0 : 1;
   } else {
-    result = lval_err("Unknown comparison operator: %s", comp);
+    lval_del(left);
+    lval_del(right);
+    return lval_err("Unknown comparison operator: %s", comp);
   }
 
   lval_del(left);
   lval_del(right);
 
-  return result;
+  return lval_num(result);
 }
 
 lval* builtin_eq(lenv* env, lval* val) {
