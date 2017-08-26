@@ -670,6 +670,18 @@ lval* builtin_print(lenv* env, lval* args) {
   return lval_sexpr();
 }
 
+lval* builtin_error(lenv* env, lval* args) {
+  UNUSED(env);
+
+  LASSERT_ARG_COUNT(args, "error", 1);
+  LASSERT_ARG_TYPE_AT(args, "error", LVAL_STR, 0);
+
+  lval* err = lval_err(args->cell[0]->str);
+  lval_del(args);
+
+  return err;
+}
+
 lval* builtin_head(lenv* env, lval* args) {
   UNUSED(env);
 
@@ -1097,6 +1109,7 @@ void lenv_add_builtins(lenv* env) {
 
   lenv_add_builtin(env, "load",  builtin_load);
   lenv_add_builtin(env, "print", builtin_print);
+  lenv_add_builtin(env, "error", builtin_error);
 
   lenv_add_builtin(env, "list", builtin_list);
   lenv_add_builtin(env, "head", builtin_head);
