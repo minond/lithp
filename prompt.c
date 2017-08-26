@@ -657,6 +657,19 @@ lval* builtin_load(lenv* env, lval* args) {
   }
 }
 
+lval* builtin_print(lenv* env, lval* args) {
+  UNUSED(env);
+
+  for (int i = 0; i < args->count; i++) {
+    lval_print(args->cell[i]);
+    putchar(' ');
+  }
+
+  putchar('\n');
+  lval_del(args);
+  return lval_sexpr();
+}
+
 lval* builtin_head(lenv* env, lval* args) {
   UNUSED(env);
 
@@ -1082,6 +1095,9 @@ void lenv_add_builtins(lenv* env) {
   lenv_add_builtin(env, "def", builtin_def);
   lenv_add_builtin(env, "=", builtin_put);
 
+  lenv_add_builtin(env, "load",  builtin_load);
+  lenv_add_builtin(env, "print", builtin_print);
+
   lenv_add_builtin(env, "list", builtin_list);
   lenv_add_builtin(env, "head", builtin_head);
   lenv_add_builtin(env, "tail", builtin_tail);
@@ -1258,7 +1274,7 @@ lval* lval_call(lenv* env, lval* formals, lval* args) {
   }
 }
 
-int main() {
+int main(int argc, char** argv) {
   char* grammar = read("grammar.txt");
 
   if (!grammar) {
@@ -1282,25 +1298,38 @@ int main() {
   lenv* env = lenv_new();
   lenv_add_builtins(env);
 
-  printf("Lithp Version %s\n", VERSION);
-  printf("Press Ctrl+c to Exit\n\n");
+  if (argc >= 2) {
+    for (int i = 1; i < argc; i++) {
+      lval* args = lval_add(lval_sexpr(), lval_str(argv[i]));
+      lval* x = builtin_load(env, args);
 
-  while (1) {
-    mpc_result_t result;
-    char* input = readline(PROMPT);
+      if (x->type == LVAL_ERR) {
+        lval_println(x);
+      }
 
-    if (mpc_parse("<stdin>", input, Lithp, &result)) {
-      lval* val = lval_eval(env, lval_read(result.output));
-      lval_println(val);
-      lval_del(val);
-      mpc_ast_delete(result.output);
-    } else {
-      mpc_err_print(result.error);
-      mpc_err_delete(result.error);
+      lval_del(x);
     }
+  } else {
+    printf("Lithp Version %s\n", VERSION);
+    printf("Press Ctrl+c to Exit\n\n");
 
-    add_history(input);
-    free(input);
+    while (1) {
+      mpc_result_t result;
+      char* input = readline(PROMPT);
+
+      if (mpc_parse("<stdin>", input, Lithp, &result)) {
+        lval* val = lval_eval(env, lval_read(result.output));
+        lval_println(val);
+        lval_del(val);
+        mpc_ast_delete(result.output);
+      } else {
+        mpc_err_print(result.error);
+        mpc_err_delete(result.error);
+      }
+
+      add_history(input);
+      free(input);
+    }
   }
 
   lenv_del(env);
