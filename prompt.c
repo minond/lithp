@@ -34,6 +34,7 @@ typedef struct lenv lenv;
 typedef lval*(*lbuiltin)(lenv*, lval*);
 
 typedef enum {
+  LVAL_STR,
   LVAL_FUN,
   LVAL_SYM,
   LVAL_SEXPR,
@@ -49,6 +50,7 @@ struct lval {
   long num;
   char* err;
   char* sym;
+  char* str;
 
   // function
   lbuiltin builtin;
@@ -132,6 +134,16 @@ lval* lval_err(char* fmt, ...) {
   return val;
 }
 
+lval* lval_str(char* str) {
+  lval* val = malloc(sizeof(lval));
+  val->type = LVAL_STR;
+
+  val->str = malloc(strlen(str) + 1);
+  strcpy(val->str, str);
+
+  return val;
+}
+
 lval* lval_lambda(lval* formals, lval* body) {
   lval* val = malloc(sizeof(lval));
 
@@ -147,6 +159,10 @@ lval* lval_lambda(lval* formals, lval* body) {
 void lval_del(lval* val) {
   switch (val->type) {
     case LVAL_NUM: break;
+
+    case LVAL_STR:
+      free(val->str);
+      break;
 
     case LVAL_ERR:
       free(val->err);
@@ -293,6 +309,19 @@ lval* lval_read_num(mpc_ast_t* t) {
     lval_num(x) : lval_err("bad number");
 }
 
+lval* lval_read_str(mpc_ast_t* t) {
+  t->contents[strlen(t->contents) - 1] = '\0';
+
+  char* unescaped = malloc(strlen(t->contents + 1) + 1);
+  strcpy(unescaped, t->contents + 1);
+
+  unescaped = mpcf_unescape(unescaped);
+  lval* str = lval_str(unescaped);
+
+  free(unescaped);
+  return str;
+}
+
 lval* lval_add(lval* val, lval* child) {
   val->count++;
   val->cell = realloc(val->cell, sizeof(lval*) * val->count);
@@ -315,6 +344,8 @@ lval* lval_read(mpc_ast_t* t) {
     return lval_read_num(t);
   if (strstr(t->tag, "symbol"))
     return lval_sym(t->contents);
+  if (strstr(t->tag, "string"))
+    return lval_read_str(t);
 
   lval* val = NULL;
 
@@ -335,6 +366,8 @@ lval* lval_read(mpc_ast_t* t) {
     if (strcmp(t->children[i]->contents, "}") == 0)
       continue;
     if (strcmp(t->children[i]->tag, "regex") == 0)
+      continue;
+    if (strcmp(t->children[i]->tag, "comment") == 0)
       continue;
 
     val = lval_add(val, lval_read(t->children[i]));
@@ -357,6 +390,15 @@ void lval_expr_print(lval* val, char open, char close) {
   putchar(close);
 }
 
+void lval_print_str(lval* val) {
+  char* escaped = malloc(sizeof(val->str) + 1);
+  strcpy(escaped, val->str);
+
+  escaped = mpcf_escape(escaped);
+  printf("\"%s\"", escaped);
+  free(escaped);
+}
+
 char* ltype_name(lval_type type) {
   switch (type) {
     case LVAL_FUN: return "Function";
@@ -364,6 +406,7 @@ char* ltype_name(lval_type type) {
     case LVAL_SEXPR: return "S-Expression";
     case LVAL_QEXPR: return "Q-Expression";
     case LVAL_NUM: return "Number";
+    case LVAL_STR: return "String";
     case LVAL_ERR: return "Error";
     default: return "Unknown type";
   }
@@ -393,6 +436,10 @@ void lval_print(lval* val) {
 
     case LVAL_QEXPR:
       lval_expr_print(val, '{', '}');
+      break;
+
+    case LVAL_STR:
+      lval_print_str(val);
       break;
 
     case LVAL_NUM:
@@ -453,6 +500,10 @@ lval* lval_copy(lval* source) {
         target->formals = lval_copy(source->formals);
         target->body = lval_copy(source->body);
       }
+      break;
+
+    case LVAL_STR:
+      strcpy(target->str, source->str);
       break;
 
     case LVAL_NUM:
@@ -549,6 +600,10 @@ int lval_eq(lval* left, lval* right) {
         }
 
         return 1;
+        break;
+
+      case LVAL_STR:
+        return strcmp(left->str, right->str) == 0;
         break;
 
       case LVAL_NUM:
@@ -1171,6 +1226,8 @@ int main() {
   }
 
   mpc_parser_t* Number = mpc_new("number");
+  mpc_parser_t* String = mpc_new("string");
+  mpc_parser_t* Comment = mpc_new("comment");
   mpc_parser_t* Symbol = mpc_new("symbol");
   mpc_parser_t* Sexpr = mpc_new("sexpr");
   mpc_parser_t* Qexpr = mpc_new("qexpr");
@@ -1178,7 +1235,7 @@ int main() {
   mpc_parser_t* Lithp = mpc_new("lithp");
 
   mpca_lang(MPCA_LANG_DEFAULT, grammar,
-    Number, Symbol, Sexpr, Qexpr, Expr, Lithp);
+    Number, String, Comment, Symbol, Sexpr, Qexpr, Expr, Lithp);
   free(grammar);
 
   lenv* env = lenv_new();
@@ -1206,7 +1263,7 @@ int main() {
   }
 
   lenv_del(env);
-  mpc_cleanup(6, Number, Symbol, Sexpr, Qexpr, Expr, Lithp);
+  mpc_cleanup(8, Number, String, Comment, Symbol, Sexpr, Qexpr, Expr, Lithp);
 
   return 0;
 }
