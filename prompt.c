@@ -974,6 +974,13 @@ void lenv_add_builtin(lenv* env, char* name, lbuiltin func) {
   lval_del(value);
 }
 
+void lenv_add_value(lenv * env, char* name, lval* value) {
+  lval* label = lval_sym(name);
+  lenv_put(env, label, value);
+  lval_del(label);
+  lval_del(value);
+}
+
 void lenv_add_builtins(lenv* env) {
   lenv_add_builtin(env, "\\",  builtin_lambda);
   lenv_add_builtin(env, "def", builtin_def);
@@ -1007,6 +1014,9 @@ void lenv_add_builtins(lenv* env) {
 
   lenv_add_builtin(env, "not", builtin_not);
   lenv_add_builtin(env, "!", builtin_not);
+
+  lenv_add_value(env, "true", lval_num(1));
+  lenv_add_value(env, "false", lval_num(0));
 }
 
 lval* lval_eval_sexpr(lenv* env, lval* val) {
