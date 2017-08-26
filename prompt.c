@@ -367,7 +367,7 @@ lval* lval_read(mpc_ast_t* t) {
       continue;
     if (strcmp(t->children[i]->tag, "regex") == 0)
       continue;
-    if (strcmp(t->children[i]->tag, "comment") == 0)
+    if (strcmp(t->children[i]->tag, "comment"))
       continue;
 
     val = lval_add(val, lval_read(t->children[i]));
