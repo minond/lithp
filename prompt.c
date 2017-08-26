@@ -26,6 +26,8 @@
 const char* PROMPT = "lithp> ";
 const char* VERSION = "0.0.0";
 
+mpc_parser_t* Lithp;
+
 struct lval;
 struct lenv;
 typedef struct lval lval;
@@ -367,7 +369,7 @@ lval* lval_read(mpc_ast_t* t) {
       continue;
     if (strcmp(t->children[i]->tag, "regex") == 0)
       continue;
-    if (strcmp(t->children[i]->tag, "comment"))
+    if (strstr(t->children[i]->tag, "comment"))
       continue;
 
     val = lval_add(val, lval_read(t->children[i]));
@@ -614,6 +616,44 @@ int lval_eq(lval* left, lval* right) {
         return strcmp(left->err, right->err) == 0;
         break;
     }
+  }
+}
+
+lval* builtin_load(lenv* env, lval* args) {
+  UNUSED(env);
+
+  LASSERT_ARG_COUNT(args, "load", 1);
+  LASSERT_ARG_TYPE_AT(args, "load", LVAL_STR, 0);
+
+  mpc_result_t r;
+
+  if (mpc_parse_contents(args->cell[0]->str, Lithp, &r)) {
+    lval* expr = lval_read(r.output);
+    mpc_ast_delete(r.output);
+
+    while (expr->count) {
+      lval* x = lval_eval(env, lval_pop(expr, 0));
+
+      if (x->type == LVAL_ERR) {
+        lval_println(x);
+      }
+
+      lval_del(x);
+    }
+
+    lval_del(expr);
+    lval_del(args);
+
+    return lval_sexpr();
+  } else {
+    char* err_msg = mpc_err_string(r.error);
+    mpc_err_delete(r.error);
+
+    lval* err = lval_err("Could not load file: %s", err_msg);
+    free(err_msg);
+    lval_del(args);
+
+    return err;
   }
 }
 
@@ -1037,6 +1077,7 @@ void lenv_add_value(lenv * env, char* name, lval* value) {
 }
 
 void lenv_add_builtins(lenv* env) {
+  lenv_add_builtin(env, "load",  builtin_load);
   lenv_add_builtin(env, "\\",  builtin_lambda);
   lenv_add_builtin(env, "def", builtin_def);
   lenv_add_builtin(env, "=", builtin_put);
@@ -1232,7 +1273,7 @@ int main() {
   mpc_parser_t* Sexpr = mpc_new("sexpr");
   mpc_parser_t* Qexpr = mpc_new("qexpr");
   mpc_parser_t* Expr = mpc_new("expr");
-  mpc_parser_t* Lithp = mpc_new("lithp");
+  Lithp = mpc_new("lithp");
 
   mpca_lang(MPCA_LANG_DEFAULT, grammar,
     Number, String, Comment, Symbol, Sexpr, Qexpr, Expr, Lithp);
