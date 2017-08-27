@@ -1288,7 +1288,7 @@ lval* lval_call(lenv* env, lval* formals, lval* args) {
 }
 
 int main(int argc, char** argv) {
-  char* grammar = read("grammar.txt");
+  char* grammar = read("grammar");
 
   if (!grammar) {
     printf("failed to read grammar file");
