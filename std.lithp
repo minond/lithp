@@ -29,7 +29,7 @@
 ;; and returns the last one. This relies on the last function, which returns
 ;; the final element of a list. We'll define this later.
 (fun {do & l}
-  {if (== 1 nil)
+  {if (== l nil)
     {nil}
     {last l}})
 
