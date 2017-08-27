@@ -620,6 +620,25 @@ int lval_eq(lval* left, lval* right) {
   }
 }
 
+lval* builtin_arity(lenv* env, lval* func) {
+  UNUSED(env);
+
+  LASSERT_ARG_COUNT(func, "load", 1);
+  LASSERT_ARG_TYPE_AT(func, "load", LVAL_FUN, 0);
+
+  int count;
+
+  if (func->cell[0]->builtin) {
+    count = -1;
+  } else {
+    count = func->cell[0]->formals->count;
+  }
+
+  lval_del(func);
+
+  return lval_num(count);
+}
+
 lval* builtin_load(lenv* env, lval* args) {
   UNUSED(env);
 
@@ -1119,6 +1138,7 @@ void lenv_add_builtins(lenv* env) {
   lenv_add_builtin(env, "join", builtin_join);
   lenv_add_builtin(env, "cons", builtin_cons);
   lenv_add_builtin(env, "len",  builtin_len);
+  lenv_add_builtin(env, "arity",  builtin_arity);
 
   lenv_add_builtin(env, "+", builtin_add);
   lenv_add_builtin(env, "-", builtin_sub);
