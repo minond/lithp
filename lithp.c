@@ -1142,6 +1142,7 @@ void lenv_add_builtins(lenv* env) {
 
   lenv_add_value(env, "true", lval_num(1));
   lenv_add_value(env, "false", lval_num(0));
+  lenv_add_value(env, "nil", lval_qexpr());
 }
 
 lval* lval_eval_sexpr(lenv* env, lval* val) {
