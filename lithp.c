@@ -505,6 +505,7 @@ lval* lval_copy(lval* source) {
       break;
 
     case LVAL_STR:
+      target->str = malloc(strlen(source->str) + 1);
       strcpy(target->str, source->str);
       break;
 
