@@ -1,33 +1,85 @@
+;;;; Standard Library
+
+;;; Building Blocks
+
+;; We've already come up with a number of cool functions I've been using in the
+;; examples. One of these is our fun function that allows us to declare
+;; functions in a neater way. We should definitely include this in our standard
+;; library.
 (def {fun}
   (\ {args body}
     {def (head args)
       (\ (tail args) body)}))
 
-(fun {unpack f xs}
-  {eval (join (list f) xs)})
-
-(fun {pack f & xs}
-  {f xs})
+;; We also had our unpack and pack functions. These too are going to be
+;; essential for users. We should include these along with their curry and
+;; uncurry aliases.
+(fun {unpack f xs} {eval (join (list f) xs)})
+(fun {pack f & xs} {f xs})
 
 (def {uncurry} pack)
 (def {curry} unpack)
 
-(fun {len l}
-  {if (== l {})
-    {0}
-    {+ 1 (len (tail l))}})
+;; Say we want to do several things in order. One way we can do this is to put
+;; each thing to do as an argument to some function. We know that arguments are
+;; evaluated in order from left to right, which is essentially sequencing
+;; events. For functions such as print and load we don't care much about what
+;; it evaluates to, but do care about the order in which it happens. Therefore
+;; we can create a do function which evaluates a number of expressions in order
+;; and returns the last one. This relies on the last function, which returns
+;; the final element of a list. We'll define this later.
+(fun {do & l}
+  {if (== 1 nil)
+    {nil}
+    {last l}})
 
-(fun {reverse l}
-  {if (== l {})
-    {{}}
-    {join (reverse (tail l)) (head l)}})
+;; Sometimes we want to save results to local variables using the = operator.
+;; When we're inside a function this will implicitly only save results locally,
+;; but sometimes we want to open up an even more local scope. For this we can
+;; create a function let which creates an empty function for code to take place
+;; in, and evaluates it.
+(fun {let b} {
+  ((\ {_} b) ())})
 
-; this is broken
-(fun {contains l item}
-  {if (== l {})
-    {0}
-    {if (== {item} (head l))
-      {1}
-      {contains (tail l) item}}})
+;;; Miscellaneous Functions
+
+;; The flip function takes a function f and two arguments a and b. It then
+;; applies f to a and b in the reversed order. This might be useful when we
+;; want a function to be partially evaluated. If we want to partially evaluate
+;; a function by only passing it in it's second argument we can use flip to
+;; give us a new function that takes the first two arguments in reversed order.
+;; This means if you want to apply the second argument of a function you can
+;; just apply the first argument to the flip of this function.
+(fun {flip f a b} {f b a})
+
+;; I couldn't think of a use for the ghost function, but it seemed interesting.
+;; It simply takes in any number of arguments and evaluates them as if they
+;; were the expression itself. So it just sits at the front of an expression
+;; like a ghost, not interacting with or changing the behaviour of the program
+;; at all.  If you can think of a use for it I'd love to hear.
+(fun {ghost & xs} {eval xs})
+
+;; The comp function is used to compose two functions. It takes as input f, g,
+;; and an argument to g. It then applies this argument to g and applies the
+;; result again to f. This can be used to compose two functions together into a
+;; new function that applies both of them in series. Like before, we can use
+;; this in combination with partial evaluation to build up complex functions
+;; from simpler ones. For example we can compose two functions. One negates a
+;; number and another unpacks a list of numbers for multiplying together with
+;; *.
+(fun {comp f g x} {f (g x)})
+
+; first, second and third
+(fun {fst l} {eval (head l)})
+(fun {snd l} {eval (head (tail l))})
+(fun {trd l} {eval (head (tail (tail l)))})
+(fun {last l} {nth (- (len l) 1) l})
+
+(fun {nth n l}
+  {if (== l nil)
+    {nil}
+    {if (== n 0)
+      {fst l}
+      {nth (- n 1) (tail l)}}})
 
 ; vim:ft=clojure
