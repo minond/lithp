@@ -1,13 +1,7 @@
 (def {fun}
   (\ {args body}
     {def (head args)
-      (\ (tail args)
-        body)}))
-
-(fun {add-together x y}
-  {+ x y})
-
-; (print (add-together 1 2))
+      (\ (tail args) body)}))
 
 (fun {unpack f xs}
   {eval (join (list f) xs)})
@@ -35,8 +29,5 @@
     {if (== {item} (head l))
       {1}
       {contains (tail l) item}}})
-
-(print {1 2 3 4 5})
-(print (reverse {1 2 3 4 5}))
 
 ; vim:ft=clojure
