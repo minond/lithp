@@ -69,17 +69,56 @@
 ;; *.
 (fun {comp f g x} {f (g x)})
 
-; first, second and third
+;;; List Functions
+
+;; The head function is used to get the first element of a list, but what it
+;; returns is still wrapped in the list. If we want to actually get the element
+;; out of this list we need to extract it somehow. Single element lists
+;; evaluate to just that element, so we can use the eval function to do this
+;; extraction.  We can also define a couple of helper function sfor aid extrating
+;; the first, second, and third elements of a list.
 (fun {fst l} {eval (head l)})
 (fun {snd l} {eval (head (tail l))})
 (fun {trd l} {eval (head (tail (tail l)))})
-(fun {last l} {nth (- (len l) 1) l})
+
+;; To find the length of a list we can resursive over it adding 1 to the length
+;; of the tail. To find the nth element of a list we can perform the tail
+;; operation and count down until we reach 0. To get the last element of a list
+;; we can just access the element at the length minus one.
+(fun {len l}
+  {if (== l nil)
+    {0}
+    {+ 1 (len (tail l))}})
 
 (fun {nth n l}
-  {if (== l nil)
+  {if (== n 0)
+    {fst l}
+    {nth (- n 1) (tail l)}})
+
+(fun {last l}
+  {nth (- (len l) 1) l})
+
+;; There are lots of other useful functions that follow this same patter. We
+;; can define functions for taking and dropping the first so many elements of a
+;; list, or functions for checking if a value is an element of a list.
+(fun {take n l}
+  {if (== n 0)
     {nil}
-    {if (== n 0)
-      {fst l}
-      {nth (- n 1) (tail l)}}})
+    {join (head l) (take (- n 1) (tail l))}})
+
+(fun {drop n l}
+  {if (== n 0)
+    {l}
+    {drop (- n 1) (tail l)}})
+
+(fun {split n l}
+  {list (take n l) (drop n l)})
+
+(fun {elem x l}
+  {if (== l nil)
+    {false}
+    {if (== x (fst l))
+      {true}
+      {elem x (tail l)}}})
 
 ; vim:ft=clojure
