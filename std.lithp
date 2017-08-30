@@ -121,4 +121,26 @@
       {true}
       {elem x (tail l)}}})
 
+;; These functions all follow similar patterns. It would be great if there was
+;; some way to extract this pattern so we don't have to type it out every time.
+;; For eample we may want a way we can perform some function on every element
+;; of a list. This is a function we can define called map. It takes as input
+;; some function, and some list. For each item in the list it applies f to that
+;; item and appends it back onto the front of the list. It then applies map to
+;; the tail of the list.
+(fun {map f l}
+  {if (== l nil)
+    {nil}
+    {join (list (f (fst l))) (map f (tail l))}})
+
+;; An adaptation of this idea is a filter function which, takes in some
+;; functional condition, and only includes items of a list which match that
+;; condition.
+(fun {filter f l}
+  {if (== l nil)
+    {nil}
+    {join (if (f (fst l))
+      {head l}
+      {nil}) (filter f (tail l))}})
+
 ; vim:ft=clojure
