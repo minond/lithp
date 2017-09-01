@@ -86,9 +86,7 @@
 ;; operation and count down until we reach 0. To get the last element of a list
 ;; we can just access the element at the length minus one.
 (fun {len l}
-  {if (== l nil)
-    {0}
-    {+ 1 (len (tail l))}})
+  {foldl (\ {c l} {if (== l nil) {0} {+ 1 c}}) 0 l})
 
 (fun {nth n l}
   {if (== n 0)
