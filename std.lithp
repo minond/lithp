@@ -160,4 +160,27 @@
 (fun {product l}
   {foldl * 1 l})
 
+;; Conditional FunctionS
+
+;; We can define a funciton select that takes in zero or more two-element lists
+;; as input. For each two element list in the arguments it first evaluates the
+;; first element of the pair. If this is true then it evaluates and returns the
+;; second item, otherwise it performs the same thing again on the rest of the
+;; list.
+(fun {select & cs}
+  {if (== cs nil)
+    {error "No selection found"}
+    {if (fst (fst (cs)))
+      {snd (fst (cs))}
+      {unpack select (tail cs)}}})
+
+(def {otherwise} true)
+
+(fun {case x & cs}
+  {if (== cs nil)
+    {error "No case found"}
+    {if (== x (fst (fst cs)))
+      {snd (fst cs)}
+      {unpack case (join (list x) (tail cs))}}})
+
 ; vim:ft=clojure
