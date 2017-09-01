@@ -623,8 +623,8 @@ int lval_eq(lval* left, lval* right) {
 lval* builtin_arity(lenv* env, lval* func) {
   UNUSED(env);
 
-  LASSERT_ARG_COUNT(func, "load", 1);
-  LASSERT_ARG_TYPE_AT(func, "load", LVAL_FUN, 0);
+  LASSERT_ARG_COUNT(func, "arity", 1);
+  LASSERT_ARG_TYPE_AT(func, "arity", LVAL_FUN, 0);
 
   int count;
 
@@ -1127,7 +1127,6 @@ void lenv_add_builtins(lenv* env) {
   lenv_add_builtin(env, "def", builtin_def);
   lenv_add_builtin(env, "=", builtin_put);
 
-  lenv_add_builtin(env, "load",  builtin_load);
   lenv_add_builtin(env, "print", builtin_print);
   lenv_add_builtin(env, "error", builtin_error);
 
@@ -1346,6 +1345,11 @@ int main(int argc, char** argv) {
     }
   } else {
     printf("Lithp Version %s\n", VERSION);
+
+    lval* loader = lval_add(lval_sexpr(), lval_str("std.lithp"));
+    builtin_load(env, loader);
+
+    printf("Loaded Standard Library from std.lithp\n");
     printf("Press Ctrl+c to Exit\n\n");
 
     while (1) {
@@ -1365,6 +1369,8 @@ int main(int argc, char** argv) {
       add_history(input);
       free(input);
     }
+
+    lval_del(loader);
   }
 
   lenv_del(env);
