@@ -143,4 +143,21 @@
       {head l}
       {nil}) (filter f (tail l))}})
 
+;; Some loops don't exactly act on a list, but accumulate some total or
+;; condense the list into a single value. These are loops such as sums and
+;; products. These can be expressed quite similarly to the len function we've
+;; already defined. These are called folds and they work like this. Supplied
+;; with a function f, a base value z and a list l they merge element in the
+;; list with the total, starting with the base value.
+(fun {foldl f z l}
+  {if (== l nil)
+    {z}
+    {foldl f (f z (fst l)) (tail l)}})
+
+(fun {sum l}
+  {foldl + 0 l})
+
+(fun {product l}
+  {foldl * 1 l})
+
 ; vim:ft=clojure
